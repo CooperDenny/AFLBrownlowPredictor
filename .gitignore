@@ -1,0 +1,11 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.RDataTmp
+
+# renv - track lock file and activate script, ignore package cache
+renv/library/
+renv/staging/
+renv/sandbox/
+renv/.python/

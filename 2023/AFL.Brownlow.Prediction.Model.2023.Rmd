@@ -1,0 +1,579 @@
+---
+title: "<b>Unveiling AFL's Finest: Predicting the 2023 Brownlow Medal</b>"
+author: "Cooper Denny"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# **Introduction**
+
+This document dives into predicting the 2023 AFL Brownlow Medal votes, using a dataset compiled from various reputable sources such as the `fitzRoy` R package, afl.com.au, AFL Tables, and the AFL Coaches Association. I have since prepared the data, cleaned it up, and transformed it to set the stage for building a solid predictive model.
+
+My journey begins with data preparation, where I loaded necessary libraries and pre-processed the AFL Brownlow Medal data. I then move on to model preparation, selecting training data and ensuring compatibility with the model. The core of the work lies in developing an ordinal logistic regression model, aiming to forecast the number of Brownlow votes a player might receive based on performance metrics.
+
+Following model training, we enter the testing phase, evaluating the model's performance against 2023 data. Through game-by-game analysis, we compare our predictions with actual Brownlow votes awarded by umpires, gaining insights into our model's effectiveness.
+
+Beyond individual games, we extend the analysis to season-wide predictions, comparing predicted votes with actual counts to gauge the model's accuracy and predictive power.
+
+Through evaluation, I aim to uncover our model's strengths and limitations, ultimately seeking to provide valuable insights and accurate predictions to enhance sports analytics.
+
+# **Data Preparation**
+
+## <u>Libraries</u>
+
+First, we load the necessary libraries for data analysis and modelling. These libraries provide functions for data manipulation, statistical modelling, and output formatting:
+
+```{r}
+library(tidyverse)   #Collection of R packages for data science
+library(ordinal)     #Package for fitting ordinal regression models
+library(knitr)       #Package for dynamic report generation in R
+library(unglue)      #Package for string manipulation
+library(fastDummies) #Package for creating dummy variables
+library(writexl)     #Package for exporting data to Excel files
+library(DT)          #Package for creating interactive tables
+library(caret)       #Package to help create a confusion matrix 
+library(ggplot2)     #Package for visual analysis and plotting
+```
+
+## <u>Data Pre-Processing</u>
+
+We read in the AFL Brownlow Medal data and filter it according to the specified training and testing time periods. The data includes comprehensive player statistics and is sourced from various reputable sources including the FitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association (AFLCA):
+
+```{r}
+#Read in the data
+brownlow_data <- read.csv("brownlow_data.csv")
+```
+
+To get an overview of the dataset, we can take a quick peek at the first 100 rows:
+
+```{r}
+#Print the table in the nice format
+datatable(head(brownlow_data,100), options = list(scrollX = TRUE, pageLength = 5))
+```
+
+We can also examine the column names to understand the variables included in the dataset:
+
+```{r}
+#Display the column names
+colnames(brownlow_data)
+```
+
+There are `r length(colnames(brownlow_data))` different variables capturing various aspects of each player's individual game performance. To streamline our analysis and reduce redundancy, we will create new variables and remove overlapping ones. For example:
+
+- We don't need the `Disposals` variable if we have `Kicks` and `Handballs` separately.
+- We can create an `Ineffective.Kicks` variable by subtracting `Effective Kicks` from `Kicks` and then removing the original `Kicks` variable.
+
+Let's perform these variable transformations and other necessary pre-processing steps:
+
+```{r}
+#Add a score involvements variable that doesn't include direct goals, behinds or goal assists
+brownlow_data$Involvements.No.Scores.Or.Assists <- brownlow_data$Score.Involvements - 
+                                                brownlow_data$Goals - 
+                                                brownlow_data$Behinds - 
+                                                brownlow_data$Goal.Assists
+
+#Add a hitouts variable that doesn't include those that go to advantage
+brownlow_data$Hitouts.No.Advantage <- brownlow_data$Hitouts - 
+                                      brownlow_data$Hitouts.To.Advantage
+
+#Add an Outside F50 ground ball gets variable 
+brownlow_data$Outside.50.Ground.Ball.Gets <- brownlow_data$Ground.Ball.Gets - 
+                                             brownlow_data$F50.Ground.Ball.Gets
+
+#Add a contested offence 1-on-1 variable that doesn't include those won
+brownlow_data$Contest.Offence.One.On.Ones.Not.Won <- brownlow_data$Contest.Offence.One.On.Ones - 
+                                                     brownlow_data$Contest.Offence.Wins
+
+#Add a contested defence 1-on-1 variable that doesn't include those lost
+brownlow_data$Contest.Defense.One.On.Ones.Not.Lost <- brownlow_data$Contest.Defense.One.On.Ones - 
+                                                      brownlow_data$Contest.Defense.Losses
+
+#Add an ineffective kicks variable
+brownlow_data$Ineffective.Kicks <- brownlow_data$Kicks - 
+                                   brownlow_data$Effective.Kicks
+
+#Add an ineffective handballs variable
+brownlow_data$Ineffective.Handballs <- brownlow_data$Handballs - 
+                                       brownlow_data$Effective.Handballs
+
+#Add a shots at goal variable that doesn't include those that go in for a goal or behind
+brownlow_data$Shots.No.Score <- brownlow_data$Shots.At.Goal - 
+                                brownlow_data$Goals - 
+                                brownlow_data$Behinds
+
+#Add a forward half pressure acts variable
+brownlow_data$Forward.Half.Pressure.Acts <- brownlow_data$Pressure.Acts - 
+                                            brownlow_data$Defensive.Half.Pressure.Acts
+
+#Add a kick ins variable that doesn't include those where the kicker plays on out of the goal square
+brownlow_data$Kick.Ins.Not.Play.On <- brownlow_data$Kick.Ins - 
+                                      brownlow_data$Kick.Ins.Play.On
+
+#Add a contested possessions variable that doesn't include contested marks
+brownlow_data$Contested.Possessions.No.Mark <- brownlow_data$Contested.Possessions - 
+                                              brownlow_data$Contested.Marks
+
+#Add an uncontested possessions variable that doesn't include uncontested marks
+brownlow_data$Uncontested.Possessions.No.Mark <- brownlow_data$Uncontested.Possessions - 
+                                                brownlow_data$Uncontested.Marks
+
+#Add an intercepts variable that doesn't include intercept marks
+brownlow_data$Intercepts.No.Mark <- brownlow_data$Intercepts - 
+                                   brownlow_data$Intercept.Marks
+
+#Add an intercepts variable that doesn't include intercept marks
+brownlow_data$Tackles.Outside.50 <- brownlow_data$Tackles - 
+                                    brownlow_data$Tackles.Inside.50
+
+#Add a Player variable which pastes a player's first name and surname
+brownlow_data$Player <- paste(brownlow_data$First.Name, brownlow_data$Surname)
+```
+
+To improve the predictive power of our model, we will also add variables that capture previous season votes. Known high pollers tend to perform well consistently.
+
+```{r}
+#Previous season Brownlow Votes and Coaches Votes variables
+prev_season_votes <- brownlow_data %>% 
+  group_by(Player.ID, Year) %>% 
+  summarise(
+  Brownlow.Votes.Previous.Season = sum(Brownlow.Votes, na.rm = TRUE),
+  Coaches.Votes.Previous.Season = sum(Coaches.Votes, na.rm = TRUE)) %>% 
+  mutate(Year = Year + 1)
+
+#Join these new variables to the brownlow_data
+brownlow_data <- full_join(brownlow_data, 
+                           prev_season_votes) %>% 
+                 filter(!is.na(First.Name))
+
+#Replace NA Brownlow Votes with a 0
+brownlow_data$Brownlow.Votes.Previous.Season <- replace(brownlow_data$Brownlow.Votes.Previous.Season, 
+                                           is.na(brownlow_data$Brownlow.Votes.Previous.Season), 
+                                           0)
+
+#Replace NA Coaches Votes with a 0
+brownlow_data$Coaches.Votes.Previous.Season <- replace(brownlow_data$Coaches.Votes.Previous.Season, 
+                                                   is.na(brownlow_data$Coaches.Votes.Previous.Season), 
+                                                   0)
+```
+
+We will also capture the maximum votes received in a season (prior to the season that the game played in the row). 
+
+```{r}
+#Max Brownlow Votes and Coaches Votes in a season variables
+
+#Add empty variable 
+Max.Brownlow.Votes.Season_prior <- data.frame()
+
+#Loop through each season of available data to get the most Brownlow 
+#Votes and Coaches Votes a player has received prior to that year
+for(i in min(brownlow_data$Year):max(brownlow_data$Year)){
+Max.Brownlow.Votes.Seasons_prior_i <- brownlow_data %>% 
+  filter(Year <= i) %>%
+  group_by(Player.ID, Year) %>% 
+  summarise(Brownlow.Votes.Previous.Season = sum(Brownlow.Votes, na.rm = TRUE),
+            Coaches.Votes.Previous.Season = sum(Coaches.Votes, na.rm = TRUE)) %>% 
+  group_by(Player.ID) %>%
+  summarise(Max.Brownlow.Votes.Season = max(Brownlow.Votes.Previous.Season),
+            Max.Coaches.Votes.Season = max(Coaches.Votes.Previous.Season),
+            Year = i + 1)
+
+Max.Brownlow.Votes.Season_prior <- bind_rows(Max.Brownlow.Votes.Season_prior, Max.Brownlow.Votes.Seasons_prior_i)
+}
+
+#Join these new variables to the brownlow_data
+brownlow_data <- full_join(brownlow_data, Max.Brownlow.Votes.Season_prior) %>% 
+                 filter(!is.na(First.Name))
+
+#Replace NA Brownlow Votes with a 0
+brownlow_data$Max.Brownlow.Votes.Season <- replace(brownlow_data$Max.Brownlow.Votes.Season, 
+                                          is.na(brownlow_data$Max.Brownlow.Votes.Season), 
+                                          0)
+
+#Replace NA Coaches Votes with a 0
+brownlow_data$Max.Coaches.Votes.Season <- replace(brownlow_data$Max.Coaches.Votes.Season, 
+                                                  is.na(brownlow_data$Max.Coaches.Votes.Season), 
+                                                  0)
+```
+
+It is also vital that we convert the variables `Brownlow.Votes` and `Coaches.Votes` to factor variables. This is necessary as it ensures that R treats them as categorical variables rather than continuous ones when building our predictive model. This distinction is important for the correct interpretation and analysis of the data.
+
+```{r}
+#Convert Brownlow Votes variable to factor
+brownlow_data$Brownlow.Votes <- as.factor(brownlow_data$Brownlow.Votes)
+
+#Convert Coaches Votes variable to factor
+brownlow_data$Coaches.Votes <- as.factor(brownlow_data$Coaches.Votes)
+```
+
+We then refine our dataset by selecting only the columns that are crucial for our analysis.
+
+```{r}
+#Select variables that will be used in the model and filter so the data is from 2016 onwards
+brownlow_data <- brownlow_data %>% 
+  select(Year, Game.ID, Round.Number, Team.Name, 
+         Opponent.Name, Player, Goals, Behinds, 
+         Effective.Kicks, Effective.Handballs, Ineffective.Kicks, Ineffective.Handballs, 
+         Bounces, Tackles.Inside.50, Tackles.Outside.50, Contested.Possessions.No.Mark, 
+         Uncontested.Possessions.No.Mark, Inside.50s, Marks.Inside.50, Contested.Marks, 
+         Uncontested.Marks, One.Percenters, Clangers, Frees.For, 
+         Frees.Against, Rebound.50s, Goal.Assists, Rating.Points, 
+         Turnovers, Intercepts.No.Mark, Involvements.No.Scores.Or.Assists, Metres.Gained, 
+         Centre.Clearances, Stoppage.Clearances, Marks.On.Lead, Intercept.Marks, 
+         Hitouts.To.Advantage, Hitouts.No.Advantage, Outside.50.Ground.Ball.Gets, F50.Ground.Ball.Gets, 
+         Score.Launches, Forward.Half.Pressure.Acts, Defensive.Half.Pressure.Acts, Spoils, 
+         Contest.Offence.One.On.Ones.Not.Won, Contest.Offence.Wins, Contest.Defense.One.On.Ones.Not.Lost, 
+         Contest.Defense.Losses, Shots.No.Score, Time.On.Ground.Percentage, Team.Goals, Team.Behinds, 
+         Opponent.Goals, Opponent.Behinds, Margin, Kick.Ins.Not.Play.On, 
+         Kick.Ins.Play.On, Max.Brownlow.Votes.Season, Max.Coaches.Votes.Season, Brownlow.Votes.Previous.Season, 
+         Coaches.Votes.Previous.Season, Coaches.Votes, Team.Result, Brownlow.Votes)
+```
+
+This enhanced dataset, with newly created and refined variables, will be used for developing the predictive model. 
+
+```{r}
+#Present the enhanced dataset in a nice format
+datatable(head(brownlow_data,100), options = list(scrollX = TRUE, pageLength = 5))
+```
+
+# **Model Preparation**
+
+## <u>Training Data Selection</u>
+
+First, we specify the time periods for training and testing the model. The training period includes data from 2015 to 2022, and the testing period includes data from the 2023 season:
+
+```{r}
+#First season of training period
+train_start_season <- 2015
+
+#Last season of training period
+train_end_season <- 2022
+
+#Season to predict Brownlow Votes
+test_season <- 2023
+```
+
+Next, we create a training dataset by filtering out our data for the specified training seasons (2015 to 2022). 
+
+```{r}
+#Create dataset that encompasses the training period
+brownlow_train <- brownlow_data %>% 
+  filter(Year >= train_start_season, Year <= train_end_season)
+```
+
+## <u>Standardising the Numeric Statistics</u>
+
+Next, we standardise the numeric statistics in the training dataset to ensure that each variable has a mean of 0 and a standard deviation of 1. This helps to normalize the data and improve the performance of the model.
+
+```{r}
+#Standardise the numeric values
+train_numeric_standardised <- scale(brownlow_train[,8:(ncol(brownlow_train)-3)])
+brownlow_train[,8:(ncol(brownlow_train)-4)] <- train_numeric_standardised
+
+#Store the center and scale as this will be used to standardise the testing set
+train_numeric_standardised.center<-attr(train_numeric_standardised,"scaled:center")
+train_numeric_standardised.scale<-attr(train_numeric_standardised,"scaled:scale")
+```
+
+## <u>Creating Dummy Variables</u>
+
+We then convert categorical variables such as Coaches.Votes and Team.Result into dummy variables. Dummy variables are binary (0 or 1) and are used to represent categorical data in a way that the model can process:
+
+```{r}
+#Create dummy variables for Coaches Votes and Team Result
+brownlow_train <- dummy_cols(brownlow_train, 
+                             select_columns = c('Coaches.Votes', 'Team.Result'),
+                             remove_selected_columns = TRUE)
+```
+
+# **Model Training**
+## <u>Building the Ordinal Logistic Regression Model</u>
+
+To predict the number of Brownlow votes a player might receive based on their performance statistics, we employ an ordinal logistic regression model. This model incorporates various metrics from the cleaned and enhanced dataset.
+
+The code below defines the model formula and fits the ordinal logistic regression model using the `clm` function. The `clm` function is part of the `ordinal` package, which is specifically designed for fitting cumulative link models, including ordinal logistic regression models. This function estimates the model parameters using maximum likelihood estimation, accommodating the ordered nature of the response variable. It is particularly useful for ordinal outcomes, where the categories are ordered (in this case, the number of Brownlow votes).
+
+Depending on the training period (i.e., if `train_end_season` is 2019 or later), different sets of predictor variables are included in the model. This distinction is made because data for certain variables, such as kick-ins, are only available from 2019 onwards.
+
+```{r}
+if(train_end_season >= 2019){
+
+   #Model if training period finishes in 2019 or later 
+   #(includes all variables from training data)
+   fullmodel <- clm(Brownlow.Votes ~ 
+                      Goals + Behinds + Effective.Kicks + Effective.Handballs + 
+                      Ineffective.Kicks + Ineffective.Handballs + Bounces + 
+                      Tackles.Inside.50 + Tackles.Outside.50 + Contested.Possessions.No.Mark + 
+                      Uncontested.Possessions.No.Mark + Inside.50s + Marks.Inside.50 + 
+                      Contested.Marks + Uncontested.Marks + One.Percenters + 
+                      Clangers + Frees.For + Frees.Against + 
+                      Rebound.50s + Goal.Assists + Rating.Points + 
+                      Turnovers + Intercepts.No.Mark + Involvements.No.Scores.Or.Assists + 
+                      Metres.Gained + Centre.Clearances + Stoppage.Clearances + 
+                      Marks.On.Lead + Intercept.Marks + Outside.50.Ground.Ball.Gets + 
+                      F50.Ground.Ball.Gets + Score.Launches + Forward.Half.Pressure.Acts + 
+                      Defensive.Half.Pressure.Acts + Spoils + Contest.Offence.One.On.Ones.Not.Won + 
+                      Contest.Offence.Wins + Contest.Defense.One.On.Ones.Not.Lost + Contest.Defense.Losses + 
+                      Shots.No.Score + Time.On.Ground.Percentage + Team.Result_W + 
+                      Team.Result_L + Team.Goals + Team.Behinds + 
+                      Opponent.Goals + Opponent.Behinds + Kick.Ins.Not.Play.On + 
+                      Kick.Ins.Play.On + Hitouts.To.Advantage + Hitouts.No.Advantage + 
+                      Coaches.Votes_1 + Coaches.Votes_2 + Coaches.Votes_3 + 
+                      Coaches.Votes_4 + Coaches.Votes_5 + Coaches.Votes_6 + 
+                      Coaches.Votes_7 + Coaches.Votes_8 + Coaches.Votes_9 + 
+                      Coaches.Votes_10 + Max.Brownlow.Votes.Season + Brownlow.Votes.Previous.Season + 
+                      Max.Coaches.Votes.Season + Coaches.Votes.Previous.Season,
+                    data = brownlow_train)
+}else{
+
+   #Model if training period finishes in 2018 or earlier 
+   #(does not include Kick.Ins.Not.Play.On & Kick.Ins.Play.On)
+   fullmodel <- clm(Brownlow.Votes ~ 
+                      Goals + Behinds + Effective.Kicks + Effective.Handballs + 
+                      Ineffective.Kicks + Ineffective.Handballs + Bounces + 
+                      Tackles.Inside.50 + Tackles.Outside.50 + Contested.Possessions.No.Mark + 
+                      Uncontested.Possessions.No.Mark + Inside.50s + Marks.Inside.50 + 
+                      Contested.Marks + Uncontested.Marks + One.Percenters + 
+                      Clangers + Frees.For + Frees.Against + 
+                      Rebound.50s + Goal.Assists + Rating.Points + 
+                      Turnovers + Intercepts.No.Mark + Involvements.No.Scores.Or.Assists + 
+                      Metres.Gained + Centre.Clearances + Stoppage.Clearances + 
+                      Marks.On.Lead + Intercept.Marks + Outside.50.Ground.Ball.Gets + 
+                      F50.Ground.Ball.Gets + Score.Launches + Forward.Half.Pressure.Acts + 
+                      Defensive.Half.Pressure.Acts + Spoils + Contest.Offence.One.On.Ones.Not.Won + 
+                      Contest.Offence.Wins + Contest.Defense.One.On.Ones.Not.Lost + Contest.Defense.Losses + 
+                      Shots.No.Score + Time.On.Ground.Percentage + Team.Result_W + 
+                      Team.Result_L + Team.Goals + Team.Behinds + 
+                      Opponent.Goals + Opponent.Behinds + Hitouts.To.Advantage + 
+                      Hitouts.No.Advantage + Coaches.Votes_1 + Coaches.Votes_2 + 
+                      Coaches.Votes_3 + Coaches.Votes_4 + Coaches.Votes_5 + 
+                      Coaches.Votes_6 + Coaches.Votes_7 + Coaches.Votes_8 + 
+                      Coaches.Votes_9 + Coaches.Votes_10 + Max.Brownlow.Votes.Season + 
+                      Brownlow.Votes.Previous.Season + Max.Coaches.Votes.Season + Coaches.Votes.Previous.Season,
+                    data = brownlow_train)
+}
+```
+
+## <u>Model Summary</u>
+
+Finally, we summarise the model to evaluate its performance and understand the significance of each predictor variable.
+
+This summary provides information about the coefficients, standard errors, z-values, and p-values for each predictor variable in the model. It helps evaluate the significance of each predictor variable and assess the overall performance of the model.
+
+```{r}
+#Print a summary of the model
+summary(fullmodel)
+```
+
+The summary of the fitted ordinal logistic regression model for predicting Brownlow Votes offers a comprehensive look at the various performance metrics and their significance in determining vote counts. This analysis includes both offensive and defensive actions, underscoring the importance of a well-rounded performance.
+
+Key offensive metrics such as goals, effective kicks, and effective handballs have strong positive coefficients and highly significant p-values. These statistics indicate that these actions greatly increase the probability of receiving votes and are reliable predictors. Although ineffective actions like ineffective kicks and handballs have positive coefficients, their impact is less pronounced, yet they remain statistically significant.
+
+Defensive metrics also play a significant role. Tackles inside and outside the 50-meter arc, contested possessions, and intercept marks all positively influence vote counts. These figures highlight the importance of defensive contributions in earning recognition. Conversely, negative coefficients for actions such as frees against and contest offence losses show that penalties and failures in contests can reduce the likelihood of receiving votes.
+
+Team performance metrics are crucial. The model indicates that winning a match and losing significantly influence vote counts, with losses having a strong negative impact. Team scoring and opponent scoring further emphasize the role of the overall game outcome in individual recognition.
+
+Interestingly, the model includes prior recognition metrics such as coaches’ votes and maximum votes in the previous season, which are strong predictors of current votes. For instance, higher coaches' votes from previous seasons strongly predict current Brownlow Votes.
+
+Overall, this model underscores the multifaceted nature of player performance evaluation, integrating offensive prowess, defensive capability, team success, and historical recognition into predicting Brownlow Votes. The balance of significant variables and their highly significant p-values suggest that excelling across multiple facets of the game is key to gaining votes. The inclusion of p-values highlights the reliability and statistical significance of these predictors in the model.
+
+
+# **Model Testing**
+
+The model testing process involves applying the trained model to a new season's data to predict the Brownlow Medal votes for each player in each game. This testing phase assesses the model's performance and ensures its predictions are reliable and accurate.
+
+```{r}
+#Create dataset that encompasses the testing period
+brownlow_test <- brownlow_data %>% 
+  filter(Year == test_season)
+
+#Standardise the numeric values, based on the training set
+brownlow_test[,8:(ncol(brownlow_test)-3)] <- scale(brownlow_test[,8:(ncol(brownlow_test)-3)],
+                                                   center=train_numeric_standardised.center,
+                                                   scale=train_numeric_standardised.scale) 
+
+#Create dummy variables for Coaches Votes and Team Result
+brownlow_test <- dummy_cols(brownlow_test, 
+                            select_columns = c('Coaches.Votes', 'Team.Result'),
+                            remove_selected_columns = TRUE)
+```
+
+## <u>Game-By-Game Votes</u>
+
+Next, the trained model is used to make predictions on the test data. The probabilities of receiving different vote counts (0, 1, 2, or 3 votes) are calculated for each player in each game.
+
+```{r}
+#Use the predict function to make predictions on the test data
+predictions <- predict(fullmodel,
+                       newdata = brownlow_test %>% select(-Brownlow.Votes), 
+                       type = 'prob')
+
+#Transform the predictions into a dataframe that is readable
+predictions_probability_matrix  <- data.frame(matrix(unlist(predictions), 
+                                              nrow = nrow(brownlow_test)))
+
+#Change the column names of the predictions_probability_matrix dataframe
+colnames(predictions_probability_matrix) <- c("Votes.0", "Votes.1", "Votes.2", "Votes.3")
+
+#Bind the columns of brownlow_test dataframe with predictions_probability_matrix 
+brownlow_test_predictions  <- cbind.data.frame(brownlow_test, predictions_probability_matrix)
+```
+
+Expected votes for each player for each game are then calculated:
+
+```{r}
+#Calculate the "expected" votes a player should receive each game according to the model
+brownlow_test_predictions$Expected.Votes <- 1*brownlow_test_predictions$Votes.1 + 
+                                            2*brownlow_test_predictions$Votes.2 + 
+                                            3*brownlow_test_predictions$Votes.3
+```
+
+Let's see which players had the best games according to the model:
+
+```{r}
+#Ordering player's games according to their "expected" votes
+expected_votes <- brownlow_test_predictions %>% 
+  select(Game.ID,	Round.Number,	Player, Team.Name, Opponent.Name, Expected.Votes) %>%
+  arrange(desc(Expected.Votes))
+
+#Presenting this table in a nice format
+datatable(expected_votes, options = list(scrollX = TRUE, pageLength = 10))
+```
+
+However, with the way the Brownlow Medal works, we can only give out a single 3 vote, a single 2 vote, and a single 1 vote each game. But by using the "expected" votes, we can assign the 3, 2 and 1 based on the top three players "expected" votes.
+
+We will also compare this to the official votes given out by the umpires at the end of each game. 
+
+```{r}
+#Assign the 3, 2 and 1 votes to the top 3 "expected" votes players of each game
+round.by.round.votes <- brownlow_test_predictions %>%
+  group_by(Game.ID) %>%
+  top_n(3, Expected.Votes) %>%
+  mutate(Predicted.Votes = order(order(Expected.Votes, Player, decreasing=FALSE))) %>% 
+  select(Game.ID, Round.Number, Player, Team.Name, 
+         Opponent.Name, Predicted.Votes, Expected.Votes) %>%
+  arrange(Game.ID, desc(Predicted.Votes))
+
+#Get the actual assigned Brownlow votes for each game
+brownlow_votes <- brownlow_data %>% 
+  filter(Year == test_season) %>%
+  select(Game.ID, Round.Number, Player, Team.Name, Opponent.Name, Brownlow.Votes) 
+
+#Join the Predicted votes with the Actual votes
+round.by.round.votes <- full_join(round.by.round.votes,
+                                  brownlow_votes) %>% 
+                        arrange(Game.ID, desc(Predicted.Votes))
+
+#Replace NA predicted votes with a 0
+round.by.round.votes$Predicted.Votes <- replace(round.by.round.votes$Predicted.Votes, 
+                                                is.na(round.by.round.votes$Predicted.Votes), 
+                                                0)
+```
+
+Let's display our predicted votes for each game in a nice format:
+
+```{r}
+#Filter round.by.round.votes to only see players predicted to poll a vote in each game
+game_vote_predictions <- round.by.round.votes %>%
+                         filter(Predicted.Votes %in% c(1,2,3))
+
+#Present the table in a nice format
+datatable(game_vote_predictions, options = list(scrollX = TRUE, pageLength = 3))
+```
+
+Using this, we can identify how well the model performs compared to the actual votes given by the umpires. 
+
+```{r}
+#Convert Predicted.Votes to a factor variable 
+round.by.round.votes$Predicted.Votes <- as.factor(round.by.round.votes$Predicted.Votes)
+
+#Present the confusion matrix
+confusionMatrix(round.by.round.votes$Predicted.Votes, round.by.round.votes$Brownlow.Votes)
+```
+### Statistics by Class
+
+#### Sensitivity (TP/(TP+FN)):
+* 0 votes: 97.43%: Very high sensitivity indicating the model is excellent at identifying instances with 0 votes. This is expected as a high proportion of players are assigned 0 votes each game, which makes this pretty easy. 
+* 1 vote: 15.46%: Low sensitivity, indicating challenges in identifying 1 vote instances.
+* 2 votes: 28.02%: Low sensitivity, indicating challenges in identifying 2 vote instances.
+* 3 votes: 56.52%: Moderate sensitivity, highlighting that the model is better at identifying standout 3 vote performances compared to 1 vote and 2 vote games. With 46 players in each game, to predict the player who will get 3 votes more than half the time is a pretty good effort.  
+
+#### Specificity (TN/(TN+FP)):
+* 0 votes: 63.12%: Indicates moderate ability to identify non-0 vote instances.
+* 1 vote: 98.12%: High specificity, indicating the model rarely misclassifies other instances as 1 vote. This is expected as a high proportion of players are assigned 0 votes each game.
+* 2 votes: 98.40%: High specificity, indicating the model rarely misclassifies other instances as 2 votes. This is expected as a high proportion of players are assigned 0 votes each game.
+* 3 votes: 99.03%: High specificity, indicating the model rarely misclassifies other instances as 3 votes. This is expected as a high proportion of players are assigned 0 votes each game.
+
+
+## <u>Season Votes</u>
+
+Let's put together a tally of the predicted votes for each player, which will give us the predicted vote count. We will compare this to the actual vote count and see how well our model performs. 
+
+We will remove all players who were both predicted to receive 0 votes and didn't receive an official vote, as this will give us a truer sense of how accurate our model is at predicting the final vote count.
+
+```{r}
+#Create a vote tally based on the predicted votes of the model
+vote_tally <- game_vote_predictions %>%
+  group_by(Player, Team.Name) %>%
+  summarise(Predicted.Votes = 3*sum(Predicted.Votes == 3) +
+                              2*sum(Predicted.Votes == 2) +
+                              1*sum(Predicted.Votes == 1)) %>% 
+  arrange(desc(Predicted.Votes))
+
+#Create a vote tally based on the actual votes of the model
+actual_votes <- brownlow_data %>%
+  filter(Year == test_season) %>% 
+  group_by(Player, Team.Name) %>% 
+  summarise(Actual.Votes = 3*sum(Brownlow.Votes == 3) +
+                           2*sum(Brownlow.Votes == 2) +
+                           1*sum(Brownlow.Votes == 1)) %>% 
+  filter(Actual.Votes > 0) %>%
+  arrange(desc(Actual.Votes))
+
+#Join both the predicted vote tally and the actual vote tally for comparison
+vote_tally <- full_join(vote_tally, actual_votes) %>%
+              arrange(desc(Predicted.Votes), desc(Actual.Votes))
+
+#Replace NA predicted votes with a 0
+vote_tally$Predicted.Votes <- replace(vote_tally$Predicted.Votes, 
+                                      is.na(vote_tally$Predicted.Votes), 
+                                      0)
+
+#Replace NA actual votes with a 0
+vote_tally$Actual.Votes <- replace(vote_tally$Actual.Votes, 
+                                   is.na(vote_tally$Actual.Votes), 
+                                   0)
+
+#Present the table in a nice format for comparison
+datatable(vote_tally, options = list(scrollX = TRUE))
+```
+
+
+The analysis of the predictions compared to the actual votes for the Brownlow Medal reveals several important insights into the model's performance. 
+
+Our model has done pretty well. While it didn't correctly predict the eventual winner in Lachie Neale, the difference between the predicted votes and actual votes for each player is pretty close, if not spot on, for most individuals. In terms of error metrics, the Mean Absolute Error (MAE) is `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`, and the Root Mean Square Error (RMSE) is `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)`. 
+
+The MAE indicates that, on average, the predicted votes differ from the actual votes by about `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`  votes. This relatively low average error demonstrates that the model's predictions are quite close to the actual votes. The RMSE, being slightly higher than the MAE, further penalizes larger errors, but its value of `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)` still reflects a reasonable level of accuracy, indicating that significant prediction errors are infrequent.
+
+```{r}
+#Plotting predicted votes against actual votes
+ggplot(vote_tally, aes(x = Predicted.Votes, y = Actual.Votes)) +
+  geom_point() +
+  geom_smooth(method = 'lm', col = 'red') +
+  ggtitle("Predicted vs Actual Votes") +
+  xlab("Predicted Votes") +
+  ylab("Actual Votes")
+```
+
+Furthermore, the correlation between the predicted and actual votes is approximately `r round(cor(vote_tally$Predicted.Votes, vote_tally$Actual.Votes),3)`. This high correlation indicates a strong linear relationship, suggesting that the predictions are closely aligned with the actual outcomes. This strong positive correlation signifies that as the predicted votes increase, the actual votes tend to increase as well, showing that the model is effectively capturing the voting patterns to a significant extent.
+
+# **Conclusion**
+In conclusion, the AFL Brownlow Prediction Model effectively uses player performance data to predict Brownlow Medal votes. By incorporating a range of offensive and defensive statistics, the model captures key aspects of player performance, allowing for a nuanced understanding of what contributes to Brownlow recognition. Key metrics like goals, effective kicks, and tackles are strong predictors of votes, highlighting the importance of both offensive and defensive contributions to a player's overall impact on the game.
+
+Furthermore, the model's integration of Coaches' votes further enhances its predictive power. This aspect demonstrates that players who are recognised by the coaches are more likely to receive votes. Additionally, variables regarding past recognition, such as previous Brownlow and Coaches' votes, demonstrates that players who consistently perform well and are acknowledged for their efforts in the past are more likely to continue receiving votes.
+
+Overall, the model provides a robust framework for predicting Brownlow votes by leveraging a combination of performance metrics and historical data. This approach not only aids in understanding what drives player recognition but also serves as a valuable tool for anticipating future voting outcomes. Additionally, it can help fans, analysts, and teams gain deeper insights into player performance and its impact on award recognition. Through continuous refinement and the inclusion of more data, the model has the potential to become even more accurate and comprehensive in its predictions.
+
+I will apply this model to the 2024 Brownlow count, training it with 2023 data incorporated. It will hopefully foster some good results.  
