@@ -1,5 +1,5 @@
 ---
-title: "<b>Predicting the 2025 Brownlow Medal</b>"
+title: "<b>Predicting the 2024 Brownlow Medal</b>"
 author: "Cooper Denny"
 output: html_document
 ---
@@ -8,16 +8,15 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
-
 # **Introduction**
 
-In this document, I constructed an ordinal logistic regression model to predict the 2025 AFL Brownlow Medal votes. To do so, I used a dataset I compiled from various trusted sources, including the fitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association. I took the time to prepare and clean the data, transforming it to lay a solid foundation for building a robust predictive model.
+In this document, I constructed an ordinal logistic regression model to predict the 2024 AFL Brownlow Medal votes. To do so, I used a dataset I compiled from various trusted sources, including the fitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association. I took the time to prepare and clean the data, transforming it to lay a solid foundation for building a robust predictive model.
 
-The model I developed this year is similar to my efforts in 2024, retaining the `Position` variable that was introduced to address the vote inflation seen in ruckmen and non-midfielders. As the Brownlow Medal is considered a midfielder award (for good reason), incorporating the playing position of players remains an important part of the model.
+The model I developed this year is similar to my efforts in 2023, but with the addition of a `Position` variable. This variable states the player's primary position according to the AFL website. I added this in as I found that some non-midfielders - particularly ruckman such as Rowan Marshall, Max Gawn and Tim English - had very inflated predicted votes compared to what they actually polled last year. As the Brownlow Medal is considered a midfielder award (for good reason), I needed to incorporate the playing position of players in some capacity.
 
-For my 2025 Brownlow prediction modelling, I trained the model on home-and-away season data from 2015-2024, with the goal to forecast how many Brownlow votes a player might receive based on their performance metrics.
+For my 2024 Brownlow prediction modelling, I trained the model on home-and-away season data from 2015-2023, with the goal to forecast how many Brownlow votes a player might receive based on their performance metrics.
 
-Once the model was trained, I shifted to the testing phase, where I evaluated its performance using player data from 2025. I conducted a game-by-game analysis to compare my predictions with the actual Brownlow votes awarded by umpires, providing insights into how well the model performed. I also took a broader look at season-wide predictions, comparing my predicted votes with the actual counts to assess the model’s accuracy and predictive capabilities.
+Once the model was trained, I shifted to the testing phase, where I evaluated its performance using player data from 2024. I conducted a game-by-game analysis to compare my predictions with the actual Brownlow votes awarded by umpires, providing insights into how well the model performed. I also took a broader look at season-wide predictions, comparing my predicted votes with the actual counts to assess the model’s accuracy and predictive capabilities.
 
 Let’s dive in!
 
@@ -28,26 +27,16 @@ Let’s dive in!
 To start, I loaded the key libraries needed for data analysis and modelling. These libraries were essential for handling tasks like data manipulation, statistical modelling, and formatting the output:
 
 ```{r}
-required_packages <- c(
-  "tidyverse",   #Collection of R packages for data science
-  "ordinal",     #Package for fitting ordinal regression models
-  "knitr",       #Package for dynamic report generation in R
-  "unglue",      #Package for string manipulation
-  "fastDummies", #Package for creating dummy variables
-  "writexl",     #Package for exporting data to Excel files
-  "DT",          #Package for creating interactive tables
-  "caret",       #Package to help create a confusion matrix
-  "ggplot2"      #Package for visual analysis and plotting
-)
-
-missing_packages <- setdiff(required_packages, rownames(installed.packages()))
-if (length(missing_packages) > 0) {
-  install.packages(missing_packages, dependencies = TRUE)
-}
-
-invisible(lapply(required_packages, library, character.only = TRUE))
+library(tidyverse)   #Collection of R packages for data science
+library(ordinal)     #Package for fitting ordinal regression models
+library(knitr)       #Package for dynamic report generation in R
+library(unglue)      #Package for string manipulation
+library(fastDummies) #Package for creating dummy variables
+library(writexl)     #Package for exporting data to Excel files
+library(DT)          #Package for creating interactive tables
+library(caret)       #Package to help create a confusion matrix 
+library(ggplot2)     #Package for visual analysis and plotting
 ```
-
 
 ## <u>Data Pre-Processing</u>
 
@@ -55,23 +44,15 @@ I began by reading in the AFL Brownlow Medal data. The dataset includes detailed
 
 ```{r}
 #Read in the data
-brownlow_data <- read.csv(
-  if (file.exists("brownlow_data_2025.csv")) "brownlow_data_2025.csv"
-  else "2025/brownlow_data_2025.csv"
-)
+brownlow_data <- read.csv("brownlow_data_2025.csv")
 ```
-
 
 To get a better understanding of the dataset, I took a quick look at the first 100 rows:
 
 ```{r}
-#Fallback for VS Code notebooks where DT::datatable may not render
-datatable <- function(data, options = NULL, ...) {
-    knitr::kable(data, format = "pipe")
-}
+#Print the table in the nice format
 datatable(head(brownlow_data,100), options = list(scrollX = TRUE, pageLength = 5))
 ```
-
 
 I also displayed the column names to get a sense of the variables included in the dataset:
 
@@ -79,7 +60,6 @@ I also displayed the column names to get a sense of the variables included in th
 #Display the column names
 colnames(brownlow_data)
 ```
-
 There are `r length(colnames(brownlow_data))` variables that capture different aspects of each player's game performance. To simplify the analysis and avoid redundancy, I created new variables and remove overlapping ones. For instance:
 
 - The `Disposals` variable isn’t needed since we already have `Kicks` and `Handballs` separately.
@@ -151,7 +131,6 @@ brownlow_data$Tackles.Outside.50 <- brownlow_data$Tackles -
 brownlow_data$Player <- paste(brownlow_data$First.Name, brownlow_data$Surname)
 ```
 
-
 To boost the predictive power of the model, I also added variables that capture votes from previous seasons. Players who have polled well in the past often continue to perform strongly.
 
 ```{r}
@@ -178,7 +157,6 @@ brownlow_data$Coaches.Votes.Previous.Season <- replace(brownlow_data$Coaches.Vot
                                                    is.na(brownlow_data$Coaches.Votes.Previous.Season), 
                                                    0)
 ```
-
 
 I’ve also calculated the maximum votes a player received in any season prior to the one in which the game was played (dating back to 2015)
 
@@ -219,7 +197,6 @@ brownlow_data$Max.Coaches.Votes.Season <- replace(brownlow_data$Max.Coaches.Vote
                                                   0)
 ```
 
-
 It was important to also convert the `Brownlow.Votes` and `Coaches.Votes` variables into factors. This ensures that R treats them as categorical rather than continuous variables, which is crucial for accurate interpretation and analysis when building the predictive model.
 
 ```{r}
@@ -229,7 +206,6 @@ brownlow_data$Brownlow.Votes <- as.factor(brownlow_data$Brownlow.Votes)
 #Convert Coaches Votes variable to factor
 brownlow_data$Coaches.Votes <- as.factor(brownlow_data$Coaches.Votes)
 ```
-
 
 Next, I refined the dataset by keeping only the columns that are essential for the analysis.
 
@@ -254,7 +230,6 @@ brownlow_data <- brownlow_data %>%
          Coaches.Votes.Previous.Season, Coaches.Votes, Team.Result, Position, Brownlow.Votes)
 ```
 
-
 This updated dataset, with the newly created and refined variables, will serve as the foundation for developing the predictive model.
 
 ```{r}
@@ -262,12 +237,11 @@ This updated dataset, with the newly created and refined variables, will serve a
 datatable(head(brownlow_data,100), options = list(scrollX = TRUE, pageLength = 5))
 ```
 
-
 # **Model Preparation**
 
 ## <u>Training Data Selection</u>
 
-To begin, I specified the time periods for training and testing the model. The training period covered data from 2015 to 2024, while the testing period focused on the 2025 season:
+To begin, I specified the time periods for training and testing the model. The training period covered data from 2015 to 2023, while the testing period focused on the 2024 season:
 
 ```{r}
 #First season of training period
@@ -280,15 +254,13 @@ train_end_season <- 2024
 test_season <- 2025
 ```
 
-
-Next, I created a training dataset by filtering the data for the specified seasons from 2015 to 2024.
+Next, I created a training dataset by filtering the data for the specified seasons from 2015 to 2023.
 
 ```{r}
 #Create dataset that encompasses the training period
 brownlow_train <- brownlow_data %>% 
   filter(Year >= train_start_season, Year <= train_end_season)
 ```
-
 
 ## <u>Standardising the Numeric Statistics</u>
 
@@ -304,7 +276,6 @@ train_numeric_standardised.center<-attr(train_numeric_standardised,"scaled:cente
 train_numeric_standardised.scale<-attr(train_numeric_standardised,"scaled:scale")
 ```
 
-
 ## <u>Creating Dummy Variables</u>
 
 Next, I converted categorical variables like `Coaches.Votes`, `Team.Result` and `Position` into dummy variables. These dummy variables are binary (0 or 1) and allow the model to process categorical data more effectively:
@@ -316,13 +287,13 @@ brownlow_train <- dummy_cols(brownlow_train,
                              remove_selected_columns = TRUE)
 ```
 
-
 # **Model Training**
 ## <u>Building the Ordinal Logistic Regression Model</u>
 
 To predict the number of Brownlow votes a player might receive based on their performance statistics, I used an ordinal logistic regression model. This model takes into account various metrics from the cleaned and enhanced dataset.
 
 The code below defines the model formula and fits the ordinal logistic regression model using the `clm` function from the `ordinal` package. This package is tailored for fitting cumulative link models, including ordinal logistic regression. The `clm` function estimates the model parameters through maximum likelihood estimation, which is well-suited for the ordered nature of the response variable. This is particularly important for ordinal outcomes, like the number of Brownlow votes, where the categories are ranked.
+
 
 ```{r}
 my_model <- clm(Brownlow.Votes ~ 
@@ -366,7 +337,6 @@ my_model <- clm(Brownlow.Votes ~
                  na.action = na.omit)
 ```
 
-
 ## <u>Model Summary</u>
 
 Finally, I summarised the model to evaluate its performance and understand the significance of each predictor variable.
@@ -377,7 +347,6 @@ This summary includes details about the coefficients, standard errors, z-values,
 #Print a summary of the model
 summary(my_model)
 ```
-
 The summary of the fitted ordinal logistic regression model for predicting Brownlow Votes provides a detailed look at the various performance metrics and their importance in determining vote counts.
 
 Key offensive metrics, such as `Goals`, `Effective.Kicks`, and `Effective.Handballs`, show strong positive coefficients and highly significant p-values. This indicates that these actions greatly boost the chances of receiving votes and serve as reliable predictors. While ineffective actions like `Ineffective.Kicks` and `Ineffective.Handballs` also have positive coefficients, their impact is somewhat less pronounced, though they still hold statistical significance.
@@ -407,8 +376,7 @@ brownlow_test <- brownlow_data %>%
 datatable(head(brownlow_test,100), options = list(scrollX = TRUE, pageLength = 5))
 ```
 
-
-After a quick peek of the 2025 data, I then standardise the numeric values on the same scale as the training set, as well as create dummy variables for the categorical variables `Coaches.Votes`, `Team.Result` and `Position`.
+After a quick peek of the 2024 data, I then standardise the numeric values on the same scale as the training set, as well as create dummy variables for the categorical variables `Coaches.Votes`, `Team.Result` and `Position`. 
 
 ```{r}
 #Standardise the numeric values, based on the training set
@@ -421,7 +389,6 @@ brownlow_test <- dummy_cols(brownlow_test,
                             select_columns = c('Coaches.Votes', 'Team.Result', 'Position'),
                             remove_selected_columns = TRUE)
 ```
-
 
 ## <u>Game-By-Game Votes</u>
 
@@ -444,7 +411,6 @@ colnames(predictions_probability_matrix) <- c("Votes.0", "Votes.1", "Votes.2", "
 brownlow_test_predictions  <- cbind.data.frame(brownlow_test, predictions_probability_matrix)
 ```
 
-
 Expected votes for each player for each game are then calculated:
 
 ```{r}
@@ -453,7 +419,6 @@ brownlow_test_predictions$Expected.Votes <- 1*brownlow_test_predictions$Votes.1 
                                             2*brownlow_test_predictions$Votes.2 + 
                                             3*brownlow_test_predictions$Votes.3
 ```
-
 
 Let's see which players had the highest "Expected Votes" games according to the model:
 
@@ -467,8 +432,7 @@ expected_votes <- brownlow_test_predictions %>%
 datatable(expected_votes, options = list(scrollX = TRUE, pageLength = 10))
 ```
 
-
-So, according to the model, the top-ranked game by `Expected.Votes` highlights a standout individual performance from the 2025 season, followed by a number of other notable performances from across the competition.
+So, according to the model, Nick Daicos' round 24 performance against Melbourne was consider the best game according to `Expected.Votes`, followed by a number of notable individual performances from other superstars of the competition. 
 
 However, with the way the Brownlow Medal works, we can only give out a single 3 vote, a single 2 vote, and a single 1 vote each game. But by using the `Expected.Votes`, we can assign the 3, 2 and 1 based on the top three players `Expected.Votes`.
 
@@ -500,7 +464,6 @@ round.by.round.votes$Predicted.Votes <- replace(round.by.round.votes$Predicted.V
                                                 0)
 ```
 
-
 Let's display our predicted votes for each game in a nice format:
 
 ```{r}
@@ -512,7 +475,6 @@ game_vote_predictions <- round.by.round.votes %>%
 datatable(game_vote_predictions, options = list(scrollX = TRUE, pageLength = 3))
 ```
 
-
 Using this, we can identify how well the model performs compared to the actual votes given by the umpires. 
 
 ```{r}
@@ -523,7 +485,6 @@ round.by.round.votes$Predicted.Votes <- as.factor(round.by.round.votes$Predicted
 confusion_matrix <- confusionMatrix(round.by.round.votes$Predicted.Votes, round.by.round.votes$Brownlow.Votes)
 confusion_matrix
 ```
-
 ### Statistics by Class
 
 #### Sensitivity (TP/(TP+FN)):
@@ -560,7 +521,6 @@ summary_table <- game_vote_predictions %>%
 
 datatable(summary_table, options = list(scrollX = TRUE, pageLength = 10))
 ```
-
 
 We will compare these predictions to the actual vote count and see how well our model performs. 
 
@@ -607,8 +567,9 @@ vote_tally <- vote_tally %>%
 datatable(vote_tally, options = list(scrollX = TRUE))
 ```
 
+The analysis of the predictions compared to the actual votes for the Brownlow Medal reveals several important insights into the model's performance. 
 
-The analysis of the predictions compared to the actual votes for the Brownlow Medal reveals several important insights into the model's performance.
+Our model has done reasonably well. The highlight is that it has correctly predicted Patrick Cripps to break the all time vote tally record (not as extreme as he actually did!), as well having Nick Daicos finish second with a high vote count as well.
 
 In terms of error metrics for the vote counts, the Mean Absolute Error (MAE) is `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`, and the Root Mean Square Error (RMSE) is `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)`. 
 
@@ -623,7 +584,6 @@ ggplot(vote_tally, aes(x = Predicted.Votes, y = Actual.Votes)) +
   xlab("Predicted Votes") +
   ylab("Actual Votes")
 ```
-
 
 Furthermore, the correlation between the predicted and actual votes is approximately `r round(cor(vote_tally$Predicted.Votes, vote_tally$Actual.Votes),3)`. This high correlation indicates a strong linear relationship, suggesting that the predictions are closely aligned with the actual outcomes. This strong positive correlation signifies that as the predicted votes increase, the actual votes tend to increase as well, showing that the model is effectively capturing the voting patterns to a significant extent.
 
