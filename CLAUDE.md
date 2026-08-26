@@ -50,6 +50,7 @@ Run `Rscript setup_renv.R` once to install all packages and generate `renv.lock`
 |------|-----|-----------------|--------|
 | 2023 | 2.165 | 56.52% (117/207) | ✗ Lachie Neale (predicted 3rd) |
 | 2024 | 2.008 | 55.56% (115/207) | ✓ Patrick Cripps |
+| 2025 | 2.228 | 58.54% (120/205) | ✗ Matt Rowell (predicted 6th); top pick Nick Daicos finished 2nd |
 
 ## Adding a new year
 

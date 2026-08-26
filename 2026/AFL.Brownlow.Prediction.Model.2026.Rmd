@@ -1,5 +1,5 @@
 ---
-title: "<b>Predicting the 2024 Brownlow Medal</b>"
+title: "<b>Predicting the 2026 Brownlow Medal</b>"
 author: "Cooper Denny"
 output: html_document
 ---
@@ -10,13 +10,13 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # **Introduction**
 
-In this document, I constructed an ordinal logistic regression model to predict the 2024 AFL Brownlow Medal votes. To do so, I used a dataset I compiled from various trusted sources, including the fitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association. I took the time to prepare and clean the data, transforming it to lay a solid foundation for building a robust predictive model.
+In this document, I constructed an ordinal logistic regression model to predict the 2026 AFL Brownlow Medal votes. To do so, I used a dataset I compiled from various trusted sources, including the fitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association. I took the time to prepare and clean the data, transforming it to lay a solid foundation for building a robust predictive model.
 
-The model I developed this year is similar to my efforts in 2023, but with the addition of a `Position` variable. This variable states the player's primary position according to the AFL website. I added this in as I found that some non-midfielders - particularly ruckman such as Rowan Marshall, Max Gawn and Tim English - had very inflated predicted votes compared to what they actually polled last year. As the Brownlow Medal is considered a midfielder award (for good reason), I needed to incorporate the playing position of players in some capacity.
+This is now the fourth year I've run this model, and the underlying approach has stayed largely consistent since its first outing in 2023. The one notable change came in 2024, when I added a `Position` variable. This states a player's primary position according to the AFL website, and I added it in after finding that some non-midfielders - particularly ruckmen such as Rowan Marshall, Max Gawn and Tim English - had very inflated predicted votes compared to what they actually polled in 2023. As the Brownlow Medal is considered a midfielder award (for good reason), I needed to incorporate playing position in some capacity. That same approach carried through into the 2025 model and again into this 2026 version.
 
-For my 2024 Brownlow prediction modelling, I trained the model on home-and-away season data from 2015-2023, with the goal to forecast how many Brownlow votes a player might receive based on their performance metrics.
+For my 2026 Brownlow prediction modelling, I trained the model on home-and-away season data from 2015-2025, with the goal to forecast how many Brownlow votes a player might receive based on their performance metrics.
 
-Once the model was trained, I shifted to the testing phase, where I evaluated its performance using player data from 2024. I conducted a game-by-game analysis to compare my predictions with the actual Brownlow votes awarded by umpires, providing insights into how well the model performed. I also took a broader look at season-wide predictions, comparing my predicted votes with the actual counts to assess the model’s accuracy and predictive capabilities.
+Once the model was trained, I shifted to the testing phase, where I applied it to player data from the 2026 season to generate game-by-game vote predictions. Unlike my 2023, 2024 and 2025 write-ups, this document doesn't compare those predictions against the official Brownlow votes - the 2026 count hasn't happened yet, as it's held after the home-and-away season concludes. Instead, this is purely a look at who the model expects to poll well, which I'll revisit once the umpires' votes are officially announced.
 
 Let’s dive in!
 
@@ -40,7 +40,7 @@ library(ggplot2)     #Package for visual analysis and plotting
 
 ## <u>Data Pre-Processing</u>
 
-I began by reading in the AFL Brownlow Medal data. The dataset includes detailed player statistics and was sourced from reliable outlets like the `FitzRoy` R package, afl.com.au, AFL Tables, and the AFL Coaches Association (AFLCA). I have already gathered, joined and cleaned the data into the file `brownlow_data.csv` so that it is ready for analysis!
+I began by reading in the AFL Brownlow Medal data. The dataset includes detailed player statistics and was sourced from reliable outlets like the `FitzRoy` R package, afl.com.au, AFL Tables, and the AFL Coaches Association (AFLCA). I have already gathered, joined and cleaned the data into the file `brownlow_data_2026.csv` so that it is ready for analysis!
 
 ```{r}
 #Read in the data
@@ -241,7 +241,7 @@ datatable(head(brownlow_data,100), options = list(scrollX = TRUE, pageLength = 5
 
 ## <u>Training Data Selection</u>
 
-To begin, I specified the time periods for training and testing the model. The training period covered data from 2015 to 2023, while the testing period focused on the 2024 season:
+To begin, I specified the time periods for training and testing the model. The training period covers data from 2015 to 2025, while the testing period focuses on the 2026 season:
 
 ```{r}
 #First season of training period
@@ -291,6 +291,25 @@ brownlow_train <- dummy_cols(brownlow_train,
 ## <u>Building the Ordinal Logistic Regression Model</u>
 
 To predict the number of Brownlow votes a player might receive based on their performance statistics, I used an ordinal logistic regression model. This model takes into account various metrics from the cleaned and enhanced dataset.
+
+### <u>Why an ordinal model?</u>
+
+`Brownlow.Votes` only ever takes one of four values - 0, 1, 2 or 3 - and, critically, those values are ordered: 3 votes represents a better game than 2, which is better than 1, which is better than 0. This rules out two more obvious modelling choices:
+
+- **Linear regression** would treat votes as a continuous number and assume the "distance" between 0 and 1 votes is identical to the distance between 2 and 3 votes. It would also happily predict nonsensical values like 1.7 or -0.4 votes.
+- **Multinomial logistic regression** would treat 0, 1, 2 and 3 as unrelated, unordered categories - the same as if they were team names. It would throw away the information that 3 is "more" than 2, and it needs a lot more parameters to do so (a separate set of coefficients per category, rather than one shared set).
+
+An **ordinal logistic regression** (fitted here as a cumulative link model, via `clm`) is built specifically for outcomes like this. Instead of modelling the probability of each vote count directly, it models the *cumulative* probability of scoring at most a given number of votes, using the same underlying logic as standard logistic regression but applied at every cut-point in the scale at once.
+
+Concretely, for an outcome $Y$ with ordered categories $j = 0, 1, 2, 3$ and a vector of predictors $x$ (goals, tackles, coaches votes, etc.), the model assumes there's an unobserved, continuous "vote-worthiness" score for each player-game, and that a player crosses into a higher vote category once that score passes a threshold. This is expressed as a set of cumulative logits:
+
+$$
+\text{logit}\big(P(Y \le j \mid x)\big) = \log\left(\frac{P(Y \le j \mid x)}{1 - P(Y \le j \mid x)}\right) = \theta_j - \beta^\top x, \quad j = 0, 1, 2
+$$
+
+Here, each $\theta_j$ is a **threshold** (cut-point) on the latent vote-worthiness scale separating category $j$ from $j+1$ - these are the `Threshold coefficients` (`0|1`, `1|2`, `2|3`) printed in the model summary below. The $\beta$ coefficients are shared across all three cut-points; this is the **proportional odds assumption**, and it's what lets the model estimate just one coefficient per predictor (e.g. one coefficient for `Goals`) rather than a separate coefficient for every vote threshold. A positive $\beta$ for a predictor means that as it increases, a player is pushed towards the higher end of the vote scale at every cut-point simultaneously - which is exactly the kind of "more of this stat generally means more votes" relationship I'd expect for something like `Goals` or `Effective.Kicks`.
+
+This structure fits the Brownlow voting process well: umpires aren't picking from four unrelated buckets, they're ranking the best performers in a game and then discretising that ranking into a 3-2-1 (plus 0 for everyone else) scale. The ordinal model's latent-threshold framing mirrors that process much more naturally than treating vote counts as either a plain number or an unordered label, while also letting me draw on the coefficients' statistical significance (via the `Coefficients` table's p-values) to see which performance metrics most reliably move a player up that latent scale.
 
 The code below defines the model formula and fits the ordinal logistic regression model using the `clm` function from the `ordinal` package. This package is tailored for fitting cumulative link models, including ordinal logistic regression. The `clm` function estimates the model parameters through maximum likelihood estimation, which is well-suited for the ordered nature of the response variable. This is particularly important for ordinal outcomes, like the number of Brownlow votes, where the categories are ranked.
 
@@ -349,15 +368,15 @@ summary(my_model)
 ```
 The summary of the fitted ordinal logistic regression model for predicting Brownlow Votes provides a detailed look at the various performance metrics and their importance in determining vote counts.
 
-Key offensive metrics, such as `Goals`, `Effective.Kicks`, and `Effective.Handballs`, show strong positive coefficients and highly significant p-values. This indicates that these actions greatly boost the chances of receiving votes and serve as reliable predictors. While ineffective actions like `Ineffective.Kicks` and `Ineffective.Handballs` also have positive coefficients, their impact is somewhat less pronounced, though they still hold statistical significance.
+Key offensive metrics, such as `Goals` (0.757), `Effective.Kicks` (0.517), and `Effective.Handballs` (0.492), show strong positive coefficients and highly significant p-values (all p < 2e-16). Of the standardised on-field performance metrics, `Goals` has the largest effect - each one standard deviation increase in a player's `Goals` for the game pushes them furthest up the latent vote-worthiness scale. This indicates that these actions greatly boost the chances of receiving votes and serve as reliable predictors. Interestingly, `Ineffective.Kicks` (0.343, p < 2e-16) and `Ineffective.Handballs` (0.182, p = 3.49e-14) are also positive and highly significant, just with smaller coefficients than their effective counterparts - suggesting umpires still credit general disposal involvement even when the disposal itself doesn't find a target.
 
-Defensive metrics are equally important. Tackles (inside and outside the 50-metre arc) and intercepts (possessions and marks) both positively contribute to vote-getting. This highlights the value of defensive efforts in gaining recognition. On the flip side, negative coefficients for actions like `Frees.Against` suggest that penalties and failures can hinder the likelihood of receiving votes.
+Defensive metrics are more of a mixed bag than I expected. `Tackles.Outside.50` (0.158, p = 6.53e-16) is a strong, significant positive predictor, but `Tackles.Inside.50` (0.032, p = 0.072) only just misses conventional significance, suggesting forward-half tackling pressure isn't as reliably rewarded as tackling elsewhere on the ground. Similarly, `Intercept.Marks` (0.132, p = 1.10e-08) is a solid positive predictor, but `Intercepts.No.Mark` (intercept possessions that aren't marks) actually carries a small negative, significant coefficient (-0.063, p = 0.020) - it seems umpires reward the more eye-catching intercept mark far more than a routine intercept possession. `Frees.Against` (-0.025, p = 0.236) is not statistically significant in this model, so I can't say penalties measurably hurt a player's vote chances once everything else is accounted for.
 
-Team performance metrics play a crucial role as well. The model indicates that winning a match and the nature of losses significantly influence vote counts, with losses having a notably negative impact. Team scoring and opponent scoring further illustrate how overall game outcomes affect individual recognition.
+Team performance metrics play a role, but not quite as symmetrically as I'd assumed. Losing a match (`Team.Result_L`: -0.744, p = 5.19e-05) has a clear, significant negative effect on vote-getting, but simply winning (`Team.Result_W`: 0.145, p = 0.427) is not itself significant - it's the losses that matter more than the wins. Both a team's own scoring (`Team.Goals`: -0.172, p = 2.91e-13) and its opponent's scoring (`Opponent.Goals`: -0.329, p < 2e-16) carry significant negative coefficients, which reflects that high-scoring shootouts tend to spread the votes more thinly across more contributors than tighter, lower-scoring contests.
 
-As I assumed, the model also takes into a player's primary position, with midfielders more likely to receive votes than those playing in other positions, such as rucks and medium defenders.
+As I assumed, the model also takes into account a player's primary position. `Position_MIDFIELDER` (0.339, p = 1.91e-11) is a strong, significant positive predictor relative to the reference position, while `Position_RUCK` (-0.306, p = 0.021) is significantly negative - confirming that midfielders remain more likely to receive votes than rucks. `Position_MEDIUM_DEFENDER` (-0.108, p = 0.198) trends negative but isn't statistically significant this time around, so I can't say with confidence that medium defenders are disadvantaged once the rest of the model's variables are held constant.
 
-But most eye-opening, is that coaches votes have a significant relationship to vote-getting on Brownlow Medal night, with all combinations of coaches votes (from 1 to 10) being significant variables in the model.
+But most eye-opening, is that coaches votes have a significant relationship to vote-getting on Brownlow Medal night, with every level of coaches votes (from 1 to 10) coming back highly significant (all p < 2e-16) and the coefficients climbing steadily from 0.823 at `Coaches.Votes_1` up to 3.577 at `Coaches.Votes_10` - by far the largest coefficients in the entire model, dwarfing even `Goals`. It's worth noting these aren't quite comparable in a one-to-one sense: the on-field statistics are standardised, so their coefficients represent the effect of a one standard deviation change, whereas each `Coaches.Votes` coefficient represents the full jump from receiving zero coaches votes to receiving that many. Even accounting for that difference in scale, though, it's a clear, monotonic relationship - the more strongly the coaches rated a player's game, the more likely the umpires were to vote for them too, and coaches recognition looks to be the single most powerful signal in the model.
 
 I've decided not to regularize or reduce the model because my primary goal was to capture as much detailed information as possible from the available data. Since the Brownlow Medal voting process is subjective and influenced by a multitude of factors, I wanted to ensure that no potentially valuable information was excluded from the model. Regularizing or simplifying the model could have risked losing some of this nuance, potentially missing out on subtle patterns that contribute to how votes are awarded. By allowing the model to be more complex, I aimed to increase its ability to pick up on these smaller details, which may be critical in accurately predicting votes in tight races or less obvious matchups. In this case, maximizing the model’s flexibility was more important than trying to prevent overfitting, as I believe the richness of the data outweighs the potential risks of over-complication.
 
@@ -376,7 +395,7 @@ brownlow_test <- brownlow_data %>%
 datatable(head(brownlow_test,100), options = list(scrollX = TRUE, pageLength = 5))
 ```
 
-After a quick peek of the 2024 data, I then standardise the numeric values on the same scale as the training set, as well as create dummy variables for the categorical variables `Coaches.Votes`, `Team.Result` and `Position`. 
+After a quick peek of the 2026 data, I then standardise the numeric values on the same scale as the training set, as well as create dummy variables for the categorical variables `Coaches.Votes`, `Team.Result` and `Position`.
 
 ```{r}
 #Standardise the numeric values, based on the training set
@@ -432,36 +451,21 @@ expected_votes <- brownlow_test_predictions %>%
 datatable(expected_votes, options = list(scrollX = TRUE, pageLength = 10))
 ```
 
-So, according to the model, Nick Daicos' round 24 performance against Melbourne was consider the best game according to `Expected.Votes`, followed by a number of notable individual performances from other superstars of the competition. 
+So, according to the model, `r expected_votes$Player[1]`'s Round `r expected_votes$Round.Number[1]` performance against `r expected_votes$Opponent.Name[1]` is considered the best game of the season so far according to `Expected.Votes`, followed by a number of notable individual performances from other stars of the competition.
 
 However, with the way the Brownlow Medal works, we can only give out a single 3 vote, a single 2 vote, and a single 1 vote each game. But by using the `Expected.Votes`, we can assign the 3, 2 and 1 based on the top three players `Expected.Votes`.
 
-We will also compare this to the official votes given out by the umpires at the end of each game (the column `Brownlow.Votes`). 
+Since the 2026 Brownlow Medal votes aren't awarded until after the home-and-away season, there's no `Brownlow.Votes` column to compare these against just yet - that comparison will have to wait until the count.
 
 ```{r}
 #Assign the 3, 2 and 1 votes to the top 3 "expected" votes players of each game
 round.by.round.votes <- brownlow_test_predictions %>%
   group_by(Game.ID) %>%
   top_n(3, Expected.Votes) %>%
-  mutate(Predicted.Votes = order(order(Expected.Votes, Player, decreasing=FALSE))) %>% 
-  select(Game.ID, Round.Number, Player, Team.Name, 
+  mutate(Predicted.Votes = order(order(Expected.Votes, Player, decreasing=FALSE))) %>%
+  select(Game.ID, Round.Number, Player, Team.Name,
          Opponent.Name, Predicted.Votes, Expected.Votes) %>%
   arrange(Game.ID, desc(Predicted.Votes))
-
-#Get the actual assigned Brownlow votes for each game
-brownlow_votes <- brownlow_data %>% 
-  filter(Year == test_season) %>%
-  select(Game.ID, Round.Number, Player, Team.Name, Opponent.Name, Brownlow.Votes) 
-
-#Join the Predicted votes with the Actual votes
-round.by.round.votes <- full_join(round.by.round.votes,
-                                  brownlow_votes) %>% 
-                        arrange(Game.ID, desc(Predicted.Votes))
-
-#Replace NA predicted votes with a 0
-round.by.round.votes$Predicted.Votes <- replace(round.by.round.votes$Predicted.Votes, 
-                                                is.na(round.by.round.votes$Predicted.Votes), 
-                                                0)
 ```
 
 Let's display our predicted votes for each game in a nice format:
@@ -474,31 +478,6 @@ game_vote_predictions <- round.by.round.votes %>%
 #Present the table in a nice format
 datatable(game_vote_predictions, options = list(scrollX = TRUE, pageLength = 3))
 ```
-
-Using this, we can identify how well the model performs compared to the actual votes given by the umpires. 
-
-```{r}
-#Convert Predicted.Votes to a factor variable 
-round.by.round.votes$Predicted.Votes <- as.factor(round.by.round.votes$Predicted.Votes)
-
-#Present the confusion matrix
-confusion_matrix <- confusionMatrix(round.by.round.votes$Predicted.Votes, round.by.round.votes$Brownlow.Votes)
-confusion_matrix
-```
-### Statistics by Class
-
-#### Sensitivity (TP/(TP+FN)):
-* 0 votes: `r round(confusion_matrix$byClass[1, 'Sensitivity']*100,2)`%: Very high sensitivity indicating the model is excellent at identifying instances with 0 votes. This is expected as a high proportion of players are assigned 0 votes each game, which makes this pretty easy. 
-* 1 vote: `r round(confusion_matrix$byClass[2, 'Sensitivity']*100,2)`%: Low sensitivity, indicating challenges in identifying 1 vote instances.
-* 2 votes: `r round(confusion_matrix$byClass[3, 'Sensitivity']*100,2)`%: Low sensitivity, indicating challenges in identifying 2 vote instances.
-* 3 votes: `r round(confusion_matrix$byClass[4, 'Sensitivity']*100,2)`%: Moderate sensitivity, highlighting that the model is better at identifying standout 3 vote performances compared to 1 vote and 2 vote games. With 46 players in each game, to predict the player who will get 3 votes more than half the time is a pretty good effort.  
-
-#### Specificity (TN/(TN+FP)):
-* 0 votes: `r round(confusion_matrix$byClass[1, 'Specificity']*100,2)`%: Indicates moderate ability to identify non-0 vote instances.
-* 1 vote: `r round(confusion_matrix$byClass[2, 'Specificity']*100,2)`%: High specificity, indicating the model rarely misclassifies other instances as 1 vote. This is expected as a high proportion of players are assigned 0 votes each game.
-* 2 votes: `r round(confusion_matrix$byClass[3, 'Specificity']*100,2)`%: High specificity, indicating the model rarely misclassifies other instances as 2 votes. This is expected as a high proportion of players are assigned 0 votes each game.
-* 3 votes: `r round(confusion_matrix$byClass[4, 'Specificity']*100,2)`%: High specificity, indicating the model rarely misclassifies other instances as 3 votes. This is expected as a high proportion of players are assigned 0 votes each game.
-
 
 ## <u>Season Votes</u>
 
@@ -522,9 +501,7 @@ summary_table <- game_vote_predictions %>%
 datatable(summary_table, options = list(scrollX = TRUE, pageLength = 10))
 ```
 
-We will compare these predictions to the actual vote count and see how well our model performs. 
-
-We will remove all players who were both predicted to receive 0 votes and didn't receive an official vote, as this will give us a truer sense of how accurate our model is at predicting the final vote count.
+This is my projected Brownlow Medal leaderboard for 2026, built purely from the model's game-by-game predicted votes. It's worth noting the leader here, `r summary_table$Player[1]`, currently sits atop the table with `r summary_table$Predicted_Votes[1]` predicted votes - but as always, a handful of close-fought games either way can shuffle the top of the count.
 
 ```{r}
 #Create a vote tally based on the predicted votes of the model
@@ -535,64 +512,18 @@ vote_tally <- game_vote_predictions %>%
                               1 * sum(Predicted.Votes == 1), .groups = 'drop') %>%
   arrange(desc(Predicted.Votes))
 
-#Create a vote tally based on the actual votes of the model
-actual_votes <- brownlow_data %>%
-  filter(Year == test_season) %>% 
-  group_by(Player, Team.Name) %>% 
-  summarise(Actual.Votes = 3*sum(Brownlow.Votes == 3) +
-                           2*sum(Brownlow.Votes == 2) +
-                           1*sum(Brownlow.Votes == 1), .groups = 'drop') %>% 
-  arrange(desc(Actual.Votes)) 
-
-#Join both the predicted vote tally and the actual vote tally for comparison
-vote_tally <- full_join(vote_tally, actual_votes) %>%
-              arrange(desc(Predicted.Votes), desc(Actual.Votes))
-
-#Replace NA predicted votes with a 0
-vote_tally$Predicted.Votes <- replace(vote_tally$Predicted.Votes, 
-                                      is.na(vote_tally$Predicted.Votes), 
-                                      0)
-
-#Replace NA actual votes with a 0
-vote_tally$Actual.Votes <- replace(vote_tally$Actual.Votes, 
-                                   is.na(vote_tally$Actual.Votes), 
-                                   0)
-
-vote_tally <- vote_tally %>%
-  mutate(Predicted.Rank = rank(-Predicted.Votes, ties.method = 'min'),
-         Actual.Rank = rank(-Actual.Votes, ties.method = 'min')) %>%
-  filter(Predicted.Votes + Actual.Votes != 0)
-
-#Present the table in a nice format for comparison
+#Present the table in a nice format
 datatable(vote_tally, options = list(scrollX = TRUE))
 ```
 
-The analysis of the predictions compared to the actual votes for the Brownlow Medal reveals several important insights into the model's performance. 
-
-Our model has done reasonably well. The highlight is that it has correctly predicted Patrick Cripps to break the all time vote tally record (not as extreme as he actually did!), as well having Nick Daicos finish second with a high vote count as well.
-
-In terms of error metrics for the vote counts, the Mean Absolute Error (MAE) is `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`, and the Root Mean Square Error (RMSE) is `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)`. 
-
-The MAE indicates that, on average, the predicted votes differ from the actual votes by about `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`  votes. This relatively low average error demonstrates that the model's predictions are quite close to the actual votes. The RMSE, being slightly higher than the MAE, further penalizes larger errors, but its value of `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)` still reflects a reasonable level of accuracy, indicating that significant prediction errors are infrequent.
-
-```{r}
-#Plotting predicted votes against actual votes
-ggplot(vote_tally, aes(x = Predicted.Votes, y = Actual.Votes)) +
-  geom_point() +
-  geom_smooth(method = 'lm', col = 'red') +
-  ggtitle("Predicted vs Actual Votes") +
-  xlab("Predicted Votes") +
-  ylab("Actual Votes")
-```
-
-Furthermore, the correlation between the predicted and actual votes is approximately `r round(cor(vote_tally$Predicted.Votes, vote_tally$Actual.Votes),3)`. This high correlation indicates a strong linear relationship, suggesting that the predictions are closely aligned with the actual outcomes. This strong positive correlation signifies that as the predicted votes increase, the actual votes tend to increase as well, showing that the model is effectively capturing the voting patterns to a significant extent.
+Since the 2026 Brownlow Medal count is still to come, there's no MAE, RMSE or predicted-vs-actual correlation to report this time around - that comparison, along with an updated results table, will follow once the umpires' votes are officially announced, just as it has for the 2023, 2024 and 2025 models.
 
 # **Conclusion**
 
-In conclusion, the development and evaluation of the ordinal logistic regression model for predicting Brownlow Medal votes showed its effectiveness in providing reliable predictions based on a solid dataset of player performances. By incorporating a range of offensive and defensive statistics, the model captures key aspects of player performance, allowing for a nuanced understanding of what contributes to Brownlow recognition. Key metrics like goals, effective kicks, and tackles are strong predictors of votes, highlighting the importance of both offensive and defensive contributions to a player's overall impact on the game.
+In conclusion, the development of this ordinal logistic regression model for predicting Brownlow Medal votes continues to show its usefulness in providing reliable, well-reasoned predictions based on a solid dataset of player performances. By incorporating a range of offensive and defensive statistics, the model captures key aspects of player performance, allowing for a nuanced understanding of what contributes to Brownlow recognition. Key metrics like `Goals`, `Effective.Kicks` and `Effective.Handballs` are the strongest predictors of votes, while defensive contributions such as `Tackles.Outside.50` and `Intercept.Marks` also play a significant, if more modest, role.
 
-Furthermore, the model's integration of Coaches' votes further enhances its predictive power. This aspect demonstrates that players who are recognised by the coaches are more likely to receive votes. Additionally, variables regarding past recognition, such as previous Brownlow and Coaches' votes, demonstrates that players who consistently perform well and are acknowledged for their efforts in the past are more likely to continue receiving votes.
+Furthermore, the model's integration of Coaches' votes further enhances its predictive power, with every level from 1 to 10 coming back highly significant - players recognised by the coaches are consistently more likely to receive umpire votes too. Past recognition is a more mixed story: a player's `Brownlow.Votes.Previous.Season` is a significant predictor, but a player's `Coaches.Votes.Previous.Season` and both `Max.Brownlow.Votes.Season` and `Max.Coaches.Votes.Season` are not significant in this fitted model, suggesting recent form carries more weight than a player's career-best season.
 
-The model’s predictive abilities, assessed through game-by-game analysis and overall season performance, indicate a strong foundation for future enhancements. By refining the model and incorporating real-time data, I can continue improving its accuracy and reliability in predicting Brownlow Medal votes.
+Across its previous three applications, the model has posted a Mean Absolute Error of 2.165 in 2023, 2.008 in 2024, and 2.228 in 2025, with 3-vote accuracy in the mid-to-high 50s each year. It correctly picked Patrick Cripps as the 2024 Medallist after predicting Lachie Neale to finish third (rather than win) in 2023, and in 2025 its top pick, Nick Daicos, ultimately finished runner-up to the actual winner, Matt Rowell, whom the model had ranked only sixth. This is now the fourth time the same approach has been applied, with the training data simply growing by another season each year.
 
-Overall, this project highlights the complexity of assessing player performance in the AFL and demonstrates how statistical modelling can enhance our understanding of the game and its players.
+Once the 2026 Brownlow Medal votes are counted, I'll come back and update this document with the game-by-game and season-wide comparisons against the official results, in keeping with prior years. Until then, this remains a forecast rather than a verdict - but it's one built on the same foundation that has, so far, proven a reasonably reliable guide to how the umpires see the game.

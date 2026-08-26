@@ -10,12 +10,15 @@ Data is compiled from the `fitzRoy` R package, afl.com.au, AFL Tables, and the A
 | :--- | :-- | :-------------- | :---------------- | :------ |
 | [2023](2023/) | 2.165 | 56.52% (117/207) | ✗ Lachie Neale (predicted 3rd) | Top 2 correctly ranked |
 | [2024](2024/) | 2.008 | 55.56% (115/207) | ✓ Patrick Cripps (predicted record-breaking tally) | Top 2 correctly ranked; correctly predicted Cripps breaking all-time vote record |
+| [2025](2025/) | 2.228 | 58.54% (120/205) | ✗ Matt Rowell (predicted 6th, 25 votes) | Top pick Nick Daicos finished 2nd; correlation 0.885 |
 
 MAE is calculated on the subset of players who predicted to poll votes and/or actually polled votes, excluding players who were correctly predicted to poll 0 (to avoid inflating accuracy).
 
 ## Model Improvements Over Time
 
 **2023 → 2024:** Added a `Position` variable sourced from the AFL website. This addressed a systematic bias in 2023 where ruckmen (Rowan Marshall, Max Gawn, Tim English) had significantly inflated predicted votes — the Brownlow is predominantly a midfielder award, and the model needed to account for positional context.
+
+**2024 → 2025:** Same modelling approach, trained on an additional season of data. The model's top pick (Nick Daicos) finished 2nd; it underrated Matt Rowell's actual winning tally, predicting him 6th.
 
 ## Approach
 
@@ -38,6 +41,10 @@ AFLBrownlowPredictor/
 │   ├── AFL.Brownlow.Prediction.Model.2024.Rmd   # Analysis and model code
 │   ├── AFL.Brownlow.Prediction.Model.2024.html  # Knitted output
 │   └── brownlow_data_2024.csv                   # Input data
+├── 2025/
+│   ├── AFL.Brownlow.Prediction.Model.2025.Rmd   # Analysis and model code
+│   ├── AFL.Brownlow.Prediction.Model.2025.html  # Knitted output
+│   └── brownlow_data_2025.csv                   # Input data
 ├── setup_renv.R                                 # One-time environment setup
 ├── .Rprofile                                    # Activates renv on project open
 └── README.md

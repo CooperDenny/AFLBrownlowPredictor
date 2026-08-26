@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # **Introduction**
 
-In this document, I constructed an ordinal logistic regression model to predict the 2024 AFL Brownlow Medal votes. To do so, I used a dataset I compiled from various trusted sources, including the fitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association. I took the time to prepare and clean the data, transforming it to lay a solid foundation for building a robust predictive model.
+In this document, I constructed an ordinal logistic regression model to predict the 2024 AFL Brownlow Medal votes. To do so, I used a dataset I compiled from various trusted sources, including the fitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association. All of that raw data is fetched and processed by [AFLPlayerStats](https://github.com/CooperDenny/AFLPlayerStats), a separate repository I maintain that handles pulling player stats, results and coaches votes so this document can focus purely on modelling. I took the time to prepare and clean the data, transforming it to lay a solid foundation for building a robust predictive model.
 
 The model I developed this year is similar to my efforts in 2023, but with the addition of a `Position` variable. This variable states the player's primary position according to the AFL website. I added this in as I found that some non-midfielders - particularly ruckman such as Rowan Marshall, Max Gawn and Tim English - had very inflated predicted votes compared to what they actually polled last year. As the Brownlow Medal is considered a midfielder award (for good reason), I needed to incorporate the playing position of players in some capacity.
 
@@ -569,7 +569,7 @@ datatable(vote_tally, options = list(scrollX = TRUE))
 
 The analysis of the predictions compared to the actual votes for the Brownlow Medal reveals several important insights into the model's performance. 
 
-Our model has done reasonably well. The highlight is that it has correctly predicted Patrick Cripps to break the all time vote tally record (not as extreme as he actually did!), as well having Nick Daicos finish second with a high vote count as well.
+Our model has done reasonably well. The headline result is that the model's top two predicted vote-getters matched the actual top two, in the exact same order: Patrick Cripps predicted first on 38 votes (he went on to smash the all-time record with 45), and Nick Daicos predicted second on 34 votes (he finished runner-up with 38). Getting the podium order right at the very top of the count, even if the exact tallies undersold just how dominant Cripps' season really was, is about as good a result as this kind of model can hope for.
 
 In terms of error metrics for the vote counts, the Mean Absolute Error (MAE) is `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`, and the Root Mean Square Error (RMSE) is `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)`. 
 
@@ -589,10 +589,10 @@ Furthermore, the correlation between the predicted and actual votes is approxima
 
 # **Conclusion**
 
-In conclusion, the development and evaluation of the ordinal logistic regression model for predicting Brownlow Medal votes showed its effectiveness in providing reliable predictions based on a solid dataset of player performances. By incorporating a range of offensive and defensive statistics, the model captures key aspects of player performance, allowing for a nuanced understanding of what contributes to Brownlow recognition. Key metrics like goals, effective kicks, and tackles are strong predictors of votes, highlighting the importance of both offensive and defensive contributions to a player's overall impact on the game.
+In conclusion, adding the `Position` variable this year appears to have paid off. Compared to 2023, the model's Mean Absolute Error improved from 2.165 to 2.008, and rather than finishing third on the model's predicted leaderboard as Lachie Neale did last year, the actual 2024 Medallist landed exactly where the model said he would: first. Correcting for the ruckman bias I noticed in the 2023 results seems to have sharpened the model's read on genuine midfield dominance, rather than just rewarding whoever racks up the most raw touches.
 
-Furthermore, the model's integration of Coaches' votes further enhances its predictive power. This aspect demonstrates that players who are recognised by the coaches are more likely to receive votes. Additionally, variables regarding past recognition, such as previous Brownlow and Coaches' votes, demonstrates that players who consistently perform well and are acknowledged for their efforts in the past are more likely to continue receiving votes.
+The model's integration of Coaches' votes continues to be one of its most powerful features - players recognised by the coaches each week are consistently more likely to poll well with the umpires too, and the previous-season vote history variables help the model anchor onto genuinely consistent performers rather than one-off big games.
 
-The model’s predictive abilities, assessed through game-by-game analysis and overall season performance, indicate a strong foundation for future enhancements. By refining the model and incorporating real-time data, I can continue improving its accuracy and reliability in predicting Brownlow Medal votes.
+Where the model still comes up short is at the margins: 1 and 2 vote games remain genuinely hard to call, since a lot of best-on-ground performances are close-run things decided by very fine margins in the umpires' eyes. The model is clearly much more comfortable picking out the standout 3-vote performances than it is untangling who exactly finishes second and third on the night.
 
-Overall, this project highlights the complexity of assessing player performance in the AFL and demonstrates how statistical modelling can enhance our understanding of the game and its players.
+I'll apply this same approach again for 2025, carrying the `Position` variable forward and adding another season of data to the training set.

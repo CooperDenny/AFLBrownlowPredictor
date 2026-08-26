@@ -10,7 +10,9 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # **Introduction**
 
-This document dives into predicting the 2023 AFL Brownlow Medal votes, using a dataset compiled from various reputable sources such as the `fitzRoy` R package, afl.com.au, AFL Tables, and the AFL Coaches Association. I have since prepared the data, cleaned it up, and transformed it to set the stage for building a solid predictive model.
+This document dives into predicting the 2023 AFL Brownlow Medal votes, using a dataset compiled from various reputable sources such as the `fitzRoy` R package, afl.com.au, AFL Tables, and the AFL Coaches Association. All of this raw data is gathered, cleaned and stitched together by a companion project of mine, [AFLPlayerStats](https://github.com/CooperDenny/AFLPlayerStats), before it ever reaches this document - that repository is what does the heavy lifting of scraping player stats, team results and coaches votes season by season.
+
+This is the first outing for this model, so there's no prior year's version to compare it to just yet - everything here, from the feature engineering to the choice of an ordinal logistic regression, is being tried for the first time. One quirk worth flagging up front: because a handful of the AFL's tracked statistics (like kick-ins) have only been recorded from 2019 onwards, the model formula below is built conditionally, using a fuller set of predictors when the training window extends into 2019 or later.
 
 My journey begins with data preparation, where I loaded necessary libraries and pre-processed the AFL Brownlow Medal data. I then move on to model preparation, selecting training data and ensuring compatibility with the model. The core of the work lies in developing an ordinal logistic regression model, aiming to forecast the number of Brownlow votes a player might receive based on performance metrics.
 
@@ -442,6 +444,8 @@ expected_votes <- brownlow_test_predictions %>%
 datatable(expected_votes, options = list(scrollX = TRUE, pageLength = 10))
 ```
 
+Top of the list is Jesse Hogan's Round 23 performance for GWS against Essendon, edging out a number of other big individual games from around the competition.
+
 However, with the way the Brownlow Medal works, we can only give out a single 3 vote, a single 2 vote, and a single 1 vote each game. But by using the "expected" votes, we can assign the 3, 2 and 1 based on the top three players "expected" votes.
 
 We will also compare this to the official votes given out by the umpires at the end of each game. 
@@ -553,7 +557,7 @@ datatable(vote_tally, options = list(scrollX = TRUE))
 
 The analysis of the predictions compared to the actual votes for the Brownlow Medal reveals several important insights into the model's performance. 
 
-Our model has done pretty well. While it didn't correctly predict the eventual winner in Lachie Neale, the difference between the predicted votes and actual votes for each player is pretty close, if not spot on, for most individuals. In terms of error metrics, the Mean Absolute Error (MAE) is `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`, and the Root Mean Square Error (RMSE) is `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)`. 
+Our model has done pretty well. While it didn't correctly predict the eventual winner in Lachie Neale, it wasn't far off - the model had Nick Daicos out in front on 31 predicted votes, with Marcus Bontempelli next on 30, and Neale himself third on 28. As it turned out, Neale won with 31 votes, Bontempelli was runner-up on 29, and Daicos third on 28 - practically the same three names, just shuffled by a vote or two. In terms of error metrics, the Mean Absolute Error (MAE) is `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`, and the Root Mean Square Error (RMSE) is `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)`.
 
 The MAE indicates that, on average, the predicted votes differ from the actual votes by about `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`  votes. This relatively low average error demonstrates that the model's predictions are quite close to the actual votes. The RMSE, being slightly higher than the MAE, further penalizes larger errors, but its value of `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)` still reflects a reasonable level of accuracy, indicating that significant prediction errors are infrequent.
 

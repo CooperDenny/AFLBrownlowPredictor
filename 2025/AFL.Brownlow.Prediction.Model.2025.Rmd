@@ -1,5 +1,5 @@
 ---
-title: "<b>Predicting the 2024 Brownlow Medal</b>"
+title: "<b>Predicting the 2025 Brownlow Medal</b>"
 author: "Cooper Denny"
 output: html_document
 ---
@@ -10,13 +10,13 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # **Introduction**
 
-In this document, I constructed an ordinal logistic regression model to predict the 2024 AFL Brownlow Medal votes. To do so, I used a dataset I compiled from various trusted sources, including the fitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association. I took the time to prepare and clean the data, transforming it to lay a solid foundation for building a robust predictive model.
+In this document, I constructed an ordinal logistic regression model to predict the 2025 AFL Brownlow Medal votes. To do so, I used a dataset I compiled from various trusted sources, including the fitzRoy R package, afl.com.au, AFL Tables, and the AFL Coaches Association. That data collection and cleaning work now lives in its own repository, [AFLPlayerStats](https://github.com/CooperDenny/AFLPlayerStats), which I run each week to keep the underlying player, team and coaches vote data current - this document simply reads in the finished product.
 
-The model I developed this year is similar to my efforts in 2023, but with the addition of a `Position` variable. This variable states the player's primary position according to the AFL website. I added this in as I found that some non-midfielders - particularly ruckman such as Rowan Marshall, Max Gawn and Tim English - had very inflated predicted votes compared to what they actually polled last year. As the Brownlow Medal is considered a midfielder award (for good reason), I needed to incorporate the playing position of players in some capacity.
+This year's model is a straight continuation of the 2024 version, `Position` variable and all. With two years of that variable now in the training data (2024 and 2023 both included in some capacity), I was curious whether the ruckman-vote-inflation problem it was designed to fix in 2023 had stayed fixed, or crept back in with a new training season added.
 
-For my 2024 Brownlow prediction modelling, I trained the model on home-and-away season data from 2015-2023, with the goal to forecast how many Brownlow votes a player might receive based on their performance metrics.
+For my 2025 Brownlow prediction modelling, I trained the model on home-and-away season data from 2015-2024, with the goal to forecast how many Brownlow votes a player might receive based on their performance metrics.
 
-Once the model was trained, I shifted to the testing phase, where I evaluated its performance using player data from 2024. I conducted a game-by-game analysis to compare my predictions with the actual Brownlow votes awarded by umpires, providing insights into how well the model performed. I also took a broader look at season-wide predictions, comparing my predicted votes with the actual counts to assess the model’s accuracy and predictive capabilities.
+Once the model was trained, I shifted to the testing phase, where I evaluated its performance using player data from 2025. I conducted a game-by-game analysis to compare my predictions with the actual Brownlow votes awarded by umpires, providing insights into how well the model performed. I also took a broader look at season-wide predictions, comparing my predicted votes with the actual counts to assess the model’s accuracy and predictive capabilities.
 
 Let’s dive in!
 
@@ -40,7 +40,7 @@ library(ggplot2)     #Package for visual analysis and plotting
 
 ## <u>Data Pre-Processing</u>
 
-I began by reading in the AFL Brownlow Medal data. The dataset includes detailed player statistics and was sourced from reliable outlets like the `FitzRoy` R package, afl.com.au, AFL Tables, and the AFL Coaches Association (AFLCA). I have already gathered, joined and cleaned the data into the file `brownlow_data.csv` so that it is ready for analysis!
+I began by reading in the AFL Brownlow Medal data. The dataset includes detailed player statistics and was sourced from reliable outlets like the `FitzRoy` R package, afl.com.au, AFL Tables, and the AFL Coaches Association (AFLCA). I have already gathered, joined and cleaned the data into the file `brownlow_data_2025.csv` so that it is ready for analysis!
 
 ```{r}
 #Read in the data
@@ -241,7 +241,7 @@ datatable(head(brownlow_data,100), options = list(scrollX = TRUE, pageLength = 5
 
 ## <u>Training Data Selection</u>
 
-To begin, I specified the time periods for training and testing the model. The training period covered data from 2015 to 2023, while the testing period focused on the 2024 season:
+To begin, I specified the time periods for training and testing the model. The training period covered data from 2015 to 2024, while the testing period focused on the 2025 season:
 
 ```{r}
 #First season of training period
@@ -376,7 +376,7 @@ brownlow_test <- brownlow_data %>%
 datatable(head(brownlow_test,100), options = list(scrollX = TRUE, pageLength = 5))
 ```
 
-After a quick peek of the 2024 data, I then standardise the numeric values on the same scale as the training set, as well as create dummy variables for the categorical variables `Coaches.Votes`, `Team.Result` and `Position`. 
+After a quick peek of the 2025 data, I then standardise the numeric values on the same scale as the training set, as well as create dummy variables for the categorical variables `Coaches.Votes`, `Team.Result` and `Position`.
 
 ```{r}
 #Standardise the numeric values, based on the training set
@@ -432,7 +432,7 @@ expected_votes <- brownlow_test_predictions %>%
 datatable(expected_votes, options = list(scrollX = TRUE, pageLength = 10))
 ```
 
-So, according to the model, Nick Daicos' round 24 performance against Melbourne was consider the best game according to `Expected.Votes`, followed by a number of notable individual performances from other superstars of the competition. 
+So, according to the model, Jeremy Cameron's Round 20 performance for Geelong against North Melbourne was considered the best game according to `Expected.Votes`, followed by a number of notable individual performances from other stars of the competition.
 
 However, with the way the Brownlow Medal works, we can only give out a single 3 vote, a single 2 vote, and a single 1 vote each game. But by using the `Expected.Votes`, we can assign the 3, 2 and 1 based on the top three players `Expected.Votes`.
 
@@ -569,7 +569,7 @@ datatable(vote_tally, options = list(scrollX = TRUE))
 
 The analysis of the predictions compared to the actual votes for the Brownlow Medal reveals several important insights into the model's performance. 
 
-Our model has done reasonably well. The highlight is that it has correctly predicted Patrick Cripps to break the all time vote tally record (not as extreme as he actually did!), as well having Nick Daicos finish second with a high vote count as well.
+This year the model's top pick didn't quite get there. Nick Daicos led the predicted leaderboard on 36 votes and ultimately finished runner-up with 32 actual votes - a solid, defensible read. But the real story of 2025 was Matt Rowell, whose 39 actual votes were enough to win the Medal outright; the model had him down in sixth on just 25 predicted votes, clearly underestimating just how much of an impact he was having each week. It's a useful reminder that a model built on standard box-score statistics can miss a player whose value shows up more in relentless pressure and contested-ball work than in eye-catching raw numbers.
 
 In terms of error metrics for the vote counts, the Mean Absolute Error (MAE) is `r round(mean(abs(vote_tally$Predicted.Votes - vote_tally$Actual.Votes)),3)`, and the Root Mean Square Error (RMSE) is `r round(sqrt(mean((vote_tally$Predicted.Votes - vote_tally$Actual.Votes)^2)),3)`. 
 
@@ -589,10 +589,8 @@ Furthermore, the correlation between the predicted and actual votes is approxima
 
 # **Conclusion**
 
-In conclusion, the development and evaluation of the ordinal logistic regression model for predicting Brownlow Medal votes showed its effectiveness in providing reliable predictions based on a solid dataset of player performances. By incorporating a range of offensive and defensive statistics, the model captures key aspects of player performance, allowing for a nuanced understanding of what contributes to Brownlow recognition. Key metrics like goals, effective kicks, and tackles are strong predictors of votes, highlighting the importance of both offensive and defensive contributions to a player's overall impact on the game.
+In conclusion, this year's result is a useful counterweight to 2024's near-perfect top two. Missing Matt Rowell's Medal win entirely shows the limits of a model that's trained on the same core box-score statistics every year - it's very good at rewarding players who consistently accumulate the traditional numbers (touches, clearances, score involvements), but it can be slower to pick up on a breakout season built more on pressure, tackling intensity and contested-ball grunt work that doesn't always show up as strongly in the raw stat line.
 
-Furthermore, the model's integration of Coaches' votes further enhances its predictive power. This aspect demonstrates that players who are recognised by the coaches are more likely to receive votes. Additionally, variables regarding past recognition, such as previous Brownlow and Coaches' votes, demonstrates that players who consistently perform well and are acknowledged for their efforts in the past are more likely to continue receiving votes.
+Encouragingly, the model's 3-vote game-by-game accuracy actually improved slightly on both 2023 and 2024, at `r round(confusion_matrix$byClass[4, 'Sensitivity']*100,2)`%. So while it stumbled on the season-long Medal winner, it's actually getting slightly better, game by game, at picking out who's having the best individual performance on the day - it's the accumulation of a whole season of near-misses at the margins, rather than a single glaring error, that cost it the winner this time.
 
-The model’s predictive abilities, assessed through game-by-game analysis and overall season performance, indicate a strong foundation for future enhancements. By refining the model and incorporating real-time data, I can continue improving its accuracy and reliability in predicting Brownlow Medal votes.
-
-Overall, this project highlights the complexity of assessing player performance in the AFL and demonstrates how statistical modelling can enhance our understanding of the game and its players.
+Looking ahead, I'll carry the same modelling approach into 2026, with another season of data added to the training set. I'm also increasingly curious whether some measure of defensive pressure or ball-winning intensity - beyond what `Tackles` and `Contested.Possessions` already capture - might help close the gap on players like Rowell in future years.
