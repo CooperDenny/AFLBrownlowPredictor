@@ -398,6 +398,44 @@
 
   .empty-state { padding: 40px 20px; text-align: center; color: var(--text-faint); font-size: 13.5px; }
 
+  /* ---------- Historical results ---------- */
+  .history-intro { margin-bottom: 20px; }
+  .history-year {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px; margin-bottom: 18px;
+  }
+  .history-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+    padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--border-soft);
+  }
+  .history-head h2 { font-size: 22px; margin-bottom: 6px; }
+  .history-blurb { color: var(--text-dim); font-size: 13px; line-height: 1.55; max-width: 76ch; margin: 0; }
+  .history-metrics { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; flex-shrink: 0; }
+  .history-metric {
+    background: var(--bg-elev); border: 1px solid var(--border-soft); border-radius: 7px;
+    color: var(--text-dim); font-size: 10.5px; font-weight: 700; padding: 6px 9px; white-space: nowrap;
+  }
+  .history-metric b { color: var(--accent-strong); font-size: 12px; margin-left: 3px; }
+  .history-boards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .history-board h3 {
+    color: var(--text-dim); font-size: 11px; letter-spacing: 0.08em;
+    margin: 0 0 7px 2px; text-transform: uppercase;
+  }
+  table.history-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.history-table th {
+    color: var(--text-faint); font-size: 9.5px; letter-spacing: 0.05em; padding: 7px 8px;
+    text-align: left; text-transform: uppercase; border-bottom: 1px solid var(--border);
+  }
+  table.history-table td { padding: 7px 8px; border-bottom: 1px solid var(--border-soft); }
+  table.history-table tbody tr:last-child td { border-bottom: none; }
+  table.history-table tbody tr:hover { background: var(--bg-card-hover); }
+  table.history-table .num { text-align: right; }
+  .history-rank { color: var(--text-faint); font-weight: 700; width: 26px; }
+  .history-rank.medal { color: var(--accent-strong); }
+  .history-player { font-weight: 700; }
+  .history-team { color: var(--text-faint); display: block; font-size: 10.5px; margin-top: 1px; }
+  .history-primary { color: var(--accent-strong); font-weight: 800; }
+
   footer {
     max-width: 1180px; margin: 30px auto 40px; padding: 16px 20px 0;
     border-top: 1px solid var(--border-soft); color: var(--text-faint); font-size: 11.5px; line-height: 1.6;
@@ -409,6 +447,9 @@
     .tile { flex: 1 1 0; min-width: 0; }
     .result-count { width: 100%; margin-left: 0; text-align: left; }
     .stat-chips { justify-content: flex-start; }
+    .history-head { flex-direction: column; }
+    .history-metrics { justify-content: flex-start; }
+    .history-boards { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -443,6 +484,7 @@
     <button class="tab-btn active" data-view="leaderboard">Leaderboard</button>
     <button class="tab-btn" data-view="teams">Team Totals</button>
     <button class="tab-btn" data-view="matches">Match by Match</button>
+    <button class="tab-btn" data-view="history">Past Results</button>
   </nav>
 </header>
 
@@ -510,6 +552,15 @@
       <span class="result-count" id="m-count"></span>
     </div>
     <div id="matches-body"></div>
+  </section>
+
+  <section class="view" id="view-history">
+    <div class="history-intro">
+      <span class="eyebrow">Track record &middot; 2023&ndash;2025</span>
+      <h2 style="font-size:26px; margin:5px 0 7px;">How the model has performed</h2>
+      <p class="section-intro">The top ten from each model run alongside the official count. Each table also shows the other tally, making it easy to see where the model was right and where the umpires saw the season differently.</p>
+    </div>
+    <div id="history-body"></div>
   </section>
 
 </main>
@@ -962,6 +1013,54 @@ const PLAYER_LOGS = {"Aaron Naughton":[{"Round.Number":0,"Team.Name":"Western Bu
     openModal();
   }
 
+  /* ---------------- Historical results ---------------- */
+  var HISTORY = [
+    {
+      year: 2025,
+      metrics: [["MAE", "2.228"], ["3-vote accuracy", "58.54%"]],
+      blurb: "Nick Daicos was the model's top pick on 36 votes and finished runner-up on 32, while Bailey Smith and Jordan Dawson also landed close to their projected totals. The major miss was Matt Rowell: the model ranked him sixth on 25, but his contested-ball and pressure-heavy season powered him to the Medal with 39 votes.",
+      predicted: [["Nick Daicos","Collingwood",36,32],["Noah Anderson","Gold Coast Suns",33,22],["Bailey Smith","Geelong Cats",30,29],["Jordan Dawson","Adelaide Crows",29,27],["Caleb Serong","Fremantle",26,25],["Matt Rowell","Gold Coast Suns",25,39],["Marcus Bontempelli","Western Bulldogs",23,25],["Zak Butters","Port Adelaide",23,21],["Tom Green","GWS Giants",22,20],["Max Holmes","Geelong Cats",22,18]],
+      actual: [["Matt Rowell","Gold Coast Suns",25,39],["Nick Daicos","Collingwood",36,32],["Bailey Smith","Geelong Cats",30,29],["Jordan Dawson","Adelaide Crows",29,27],["Andrew Brayshaw","Fremantle",16,26],["Caleb Serong","Fremantle",26,25],["Marcus Bontempelli","Western Bulldogs",23,25],["Nasiah Wanganeen-Milera","St Kilda",21,23],["Max Gawn","Melbourne",16,23],["Noah Anderson","Gold Coast Suns",33,22]]
+    },
+    {
+      year: 2024,
+      metrics: [["MAE", "2.008"], ["3-vote accuracy", "55.56%"]],
+      blurb: "The strongest headline result so far: the model correctly called Patrick Cripps first and Nick Daicos second. It projected 38 and 34 votes respectively; they finished on 45 and 38, with Cripps breaking the all-time voting record. Seven of the model's predicted top ten appeared in the official top ten.",
+      predicted: [["Patrick Cripps","Carlton",38,45],["Nick Daicos","Collingwood",34,38],["Isaac Heeney","Sydney Swans",31,28],["Marcus Bontempelli","Western Bulldogs",27,19],["Lachie Neale","Brisbane Lions",26,22],["Zak Butters","Port Adelaide",25,29],["Caleb Serong","Fremantle",24,28],["Errol Gulden","Sydney Swans",23,25],["Zach Merrett","Essendon",23,18],["Noah Anderson","Gold Coast Suns",22,14]],
+      actual: [["Patrick Cripps","Carlton",38,45],["Nick Daicos","Collingwood",34,38],["Zak Butters","Port Adelaide",25,29],["Isaac Heeney","Sydney Swans",31,28],["Caleb Serong","Fremantle",24,28],["Tom Green","GWS Giants",17,27],["Adam Treloar","Western Bulldogs",21,26],["Errol Gulden","Sydney Swans",23,25],["Matt Rowell","Gold Coast Suns",19,25],["Jai Newcombe","Hawthorn",19,24]]
+    },
+    {
+      year: 2023,
+      metrics: [["MAE", "2.165"], ["3-vote accuracy", "56.52%"]],
+      blurb: "The model found the right leading trio but not quite the winning order: Nick Daicos was tipped first on 31, Marcus Bontempelli second on 30 and Lachie Neale third on 28. The count reversed the story at the top, with Neale winning on 31 ahead of Bontempelli and Daicos. An observed bias toward ruckmen prompted the addition of player position from 2024.",
+      predicted: [["Nick Daicos","Collingwood",31,28],["Marcus Bontempelli","Western Bulldogs",30,29],["Lachie Neale","Brisbane Lions",28,31],["Christian Petracca","Melbourne",28,26],["Zak Butters","Port Adelaide",25,27],["Errol Gulden","Sydney Swans",24,27],["Tim Taranto","Richmond",23,19],["Connor Rozee","Port Adelaide",22,21],["Caleb Serong","Fremantle",21,24],["Zach Merrett","Essendon",21,17]],
+      actual: [["Lachie Neale","Brisbane Lions",28,31],["Marcus Bontempelli","Western Bulldogs",30,29],["Nick Daicos","Collingwood",31,28],["Zak Butters","Port Adelaide",25,27],["Errol Gulden","Sydney Swans",24,27],["Christian Petracca","Melbourne",28,26],["Caleb Serong","Fremantle",21,24],["Jack Viney","Melbourne",15,24],["Noah Anderson","Gold Coast Suns",20,22],["Patrick Cripps","Carlton",13,22]]
+    }
+  ];
+
+  function historyTableHtml(title, rows, primaryIndex) {
+    var secondaryLabel = primaryIndex === 2 ? "Actual" : "Pred.";
+    return '<div class="history-board"><h3>' + title + '</h3><div class="table-wrap">' +
+      '<table class="history-table"><thead><tr><th class="num">#</th><th>Player</th><th class="num">Votes</th><th class="num">' + secondaryLabel + '</th></tr></thead><tbody>' +
+      rows.map(function (r, i) {
+        return '<tr><td class="num history-rank ' + (i < 3 ? 'medal' : '') + '">' + (i + 1) + '</td>' +
+          '<td><span class="history-player">' + r[0] + '</span><span class="history-team">' + r[1] + '</span></td>' +
+          '<td class="num history-primary">' + r[primaryIndex] + '</td><td class="num">' + r[primaryIndex === 2 ? 3 : 2] + '</td></tr>';
+      }).join("") + '</tbody></table></div></div>';
+  }
+
+  function renderHistory() {
+    document.getElementById("history-body").innerHTML = HISTORY.map(function (season) {
+      var metrics = season.metrics.map(function (m) {
+        return '<span class="history-metric">' + m[0] + '<b>' + m[1] + '</b></span>';
+      }).join("");
+      return '<article class="history-year"><div class="history-head"><div><h2>' + season.year + ' count</h2>' +
+        '<p class="history-blurb">' + season.blurb + '</p></div><div class="history-metrics">' + metrics + '</div></div>' +
+        '<div class="history-boards">' + historyTableHtml("Model leaderboard", season.predicted, 2) +
+        historyTableHtml("Official leaderboard", season.actual, 3) + '</div></article>';
+    }).join("");
+  }
+
   /* ---------------- Tabs ---------------- */
   document.querySelectorAll(".tab-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -987,6 +1086,7 @@ const PLAYER_LOGS = {"Aaron Naughton":[{"Round.Number":0,"Team.Name":"Western Bu
   renderLeaderboard();
   renderTeams();
   renderMatches();
+  renderHistory();
 })();
 </script>
 </body>
