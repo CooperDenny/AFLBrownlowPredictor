@@ -1025,7 +1025,7 @@ const PLAYER_LOGS = {"Aaron Naughton":[{"Round.Number":0,"Team.Name":"Western Bu
     {
       year: 2024,
       metrics: [["MAE", "2.008"], ["3-vote accuracy", "55.56%"]],
-      blurb: "The strongest headline result so far: the model correctly called Patrick Cripps first and Nick Daicos second. It projected 38 and 34 votes respectively; they finished on 45 and 38, with Cripps breaking the all-time voting record. Seven of the model's predicted top ten appeared in the official top ten.",
+      blurb: "The strongest headline result so far: the model correctly called Patrick Cripps first and Nick Daicos second. It projected 38 and 34 votes respectively; they finished on 45 and 38, with Cripps breaking the all-time voting record. Six of the model's predicted top ten appeared in the official top ten.",
       predicted: [["Patrick Cripps","Carlton",38,45],["Nick Daicos","Collingwood",34,38],["Isaac Heeney","Sydney Swans",31,28],["Marcus Bontempelli","Western Bulldogs",27,19],["Lachie Neale","Brisbane Lions",26,22],["Zak Butters","Port Adelaide",25,29],["Caleb Serong","Fremantle",24,28],["Errol Gulden","Sydney Swans",23,25],["Zach Merrett","Essendon",23,18],["Noah Anderson","Gold Coast Suns",22,14]],
       actual: [["Patrick Cripps","Carlton",38,45],["Nick Daicos","Collingwood",34,38],["Zak Butters","Port Adelaide",25,29],["Isaac Heeney","Sydney Swans",31,28],["Caleb Serong","Fremantle",24,28],["Tom Green","GWS Giants",17,27],["Adam Treloar","Western Bulldogs",21,26],["Errol Gulden","Sydney Swans",23,25],["Matt Rowell","Gold Coast Suns",19,25],["Jai Newcombe","Hawthorn",19,24]]
     },
@@ -1043,7 +1043,8 @@ const PLAYER_LOGS = {"Aaron Naughton":[{"Round.Number":0,"Team.Name":"Western Bu
     return '<div class="history-board"><h3>' + title + '</h3><div class="table-wrap">' +
       '<table class="history-table"><thead><tr><th class="num">#</th><th>Player</th><th class="num">Votes</th><th class="num">' + secondaryLabel + '</th></tr></thead><tbody>' +
       rows.map(function (r, i) {
-        return '<tr><td class="num history-rank ' + (i < 3 ? 'medal' : '') + '">' + (i + 1) + '</td>' +
+        var rank = rows.findIndex(function (candidate) { return candidate[primaryIndex] === r[primaryIndex]; }) + 1;
+        return '<tr><td class="num history-rank ' + (rank <= 3 ? 'medal' : '') + '">' + rank + '</td>' +
           '<td><span class="history-player">' + r[0] + '</span><span class="history-team">' + r[1] + '</span></td>' +
           '<td class="num history-primary">' + r[primaryIndex] + '</td><td class="num">' + r[primaryIndex === 2 ? 3 : 2] + '</td></tr>';
       }).join("") + '</tbody></table></div></div>';
