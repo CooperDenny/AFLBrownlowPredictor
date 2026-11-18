@@ -18,8 +18,10 @@ AFLBrownlowPredictor/
 │   ├── AFL.Brownlow.Prediction.Model.2024.Rmd   # Full analysis and model code
 │   ├── AFL.Brownlow.Prediction.Model.2024.html  # Knitted HTML output
 │   └── brownlow_data_2024.csv                   # Input data (2015–2024)
-├── setup_renv.R    # Run once to initialise renv and generate renv.lock
-└── .Rprofile       # Activates renv automatically on project open
+├── 2025/                                        # Same layout; brownlow_data_2025.csv
+├── 2026/                                        # Same layout, plus AFL.Brownlow.Predicted.Votes.2026.html (live board)
+├── setup_renv.R    # Run once to initialise renv and generate renv.lock (not yet run: no renv.lock committed)
+└── .Rprofile       # renv activation line is commented out until renv.lock exists
 ```
 
 ## Key modelling decisions
@@ -51,6 +53,7 @@ Run `Rscript setup_renv.R` once to install all packages and generate `renv.lock`
 | 2023 | 2.165 | 56.52% (117/207) | ✗ Lachie Neale (predicted 3rd) |
 | 2024 | 2.008 | 55.56% (115/207) | ✓ Patrick Cripps |
 | 2025 | 2.228 | 58.54% (120/205) | ✗ Matt Rowell (predicted 6th); top pick Nick Daicos finished 2nd |
+| 2026 | — | — | Predicted pre-count; evaluation against actual votes not yet added |
 
 ## Adding a new year
 
@@ -58,3 +61,4 @@ Run `Rscript setup_renv.R` once to install all packages and generate `renv.lock`
 2. Copy the prior year's `.Rmd` into a new `{year}/` subdirectory
 3. Update `train_end_season` and `test_season`
 4. Update the results table in this file and in `README.md`
+5. After the count, add the evaluation (MAE, RMSE, 3-vote accuracy, correlation, winner) to that year's Rmd and fill in the results row. The portfolio's project pages (CooperDenny.github.io) are generated from these reports.
