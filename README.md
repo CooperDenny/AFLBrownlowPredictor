@@ -11,6 +11,7 @@ Data is compiled from the `fitzRoy` R package, afl.com.au, AFL Tables, and the A
 | [2023](2023/) | 2.165 | 56.52% (117/207) | ✗ Lachie Neale (predicted 3rd) | Top 2 correctly ranked |
 | [2024](2024/) | 2.008 | 55.56% (115/207) | ✓ Patrick Cripps (predicted record-breaking tally) | Top 2 correctly ranked; correctly predicted Cripps breaking all-time vote record |
 | [2025](2025/) | 2.228 | 58.54% (120/205) | ✗ Matt Rowell (predicted 6th, 25 votes) | Top pick Nick Daicos finished 2nd; correlation 0.885 |
+| [2026](2026/) | — | — | — | Predictions published before the count; evaluation against the actual votes not yet added |
 
 MAE is calculated on the subset of players who predicted to poll votes and/or actually polled votes, excluding players who were correctly predicted to poll 0 (to avoid inflating accuracy).
 
@@ -19,6 +20,8 @@ MAE is calculated on the subset of players who predicted to poll votes and/or ac
 **2023 → 2024:** Added a `Position` variable sourced from the AFL website. This addressed a systematic bias in 2023 where ruckmen (Rowan Marshall, Max Gawn, Tim English) had significantly inflated predicted votes — the Brownlow is predominantly a midfielder award, and the model needed to account for positional context.
 
 **2024 → 2025:** Same modelling approach, trained on an additional season of data. The model's top pick (Nick Daicos) finished 2nd; it underrated Matt Rowell's actual winning tally, predicting him 6th.
+
+**2025 → 2026:** Same approach, trained on 2015–2025. 2026 also adds a live board (`AFL.Brownlow.Predicted.Votes.2026.html`): a standalone page with the predicted leaderboard, team totals, match-by-match votes and past results.
 
 ## Approach
 
@@ -45,6 +48,11 @@ AFLBrownlowPredictor/
 │   ├── AFL.Brownlow.Prediction.Model.2025.Rmd   # Analysis and model code
 │   ├── AFL.Brownlow.Prediction.Model.2025.html  # Knitted output
 │   └── brownlow_data_2025.csv                   # Input data
+├── 2026/
+│   ├── AFL.Brownlow.Prediction.Model.2026.Rmd   # Analysis and model code
+│   ├── AFL.Brownlow.Prediction.Model.2026.html  # Knitted output (pre-count)
+│   ├── AFL.Brownlow.Predicted.Votes.2026.html   # Live board: leaderboard, team totals, match by match
+│   └── brownlow_data_2026.csv                   # Input data
 ├── setup_renv.R                                 # One-time environment setup
 ├── .Rprofile                                    # Activates renv on project open
 └── README.md
@@ -52,10 +60,14 @@ AFLBrownlowPredictor/
 
 ## Reproducibility
 
-This project uses [`renv`](https://rstudio.github.io/renv/) for package management. To reproduce the environment:
+Input data is built by [AFLPlayerStats](https://github.com/CooperDenny/AFLPlayerStats) (`brownlow_data.R`).
+
+Required packages: `tidyverse`, `ordinal`, `knitr`, `unglue`, `fastDummies`, `writexl`, `DT`, `caret`, `ggplot2`.
+
+Package versions are not pinned yet: `renv.lock` has not been generated, and the `renv` activation line in `.Rprofile` is commented out. To pin them, run once and commit the result:
 
 ```r
-Rscript setup_renv.R
+Rscript setup_renv.R   # installs the packages above and writes renv.lock
 ```
 
-This installs all required packages and generates a `renv.lock` file. Required packages: `tidyverse`, `ordinal`, `knitr`, `unglue`, `fastDummies`, `writexl`, `DT`, `caret`, `ggplot2`.
+then commit `renv.lock` and `renv/activate.R`.
